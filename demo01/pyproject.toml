@@ -1,0 +1,17 @@
+[project]
+name = "demo01"
+version = "0.1.0"
+description = "demo01"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [ "mcp>=1.6.0",]
+[[project.authors]]
+name = "Marcelo Cabral Ghilardi"
+email = "marcelo.cabral@acertpix.com.br"
+
+[build-system]
+requires = [ "hatchling",]
+build-backend = "hatchling.build"
+
+[project.scripts]
+demo01 = "demo01:main"
