@@ -45,3 +45,10 @@ O servidor se conecta à API da Acertpix em `https://api.plataformaacertpix.com.
 ## Licença
 
 Proprietário - Acertpix
+
+
+## Documentação MCP VSCode
+https://code.visualstudio.com/docs/copilot/chat/mcp-servers
+
+## Biblioteca basica para criação de servidores MCP com Python 
+https://github.com/modelcontextprotocol/create-python-server
