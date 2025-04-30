@@ -3,15 +3,13 @@ name = "acertpix-api-score"
 version = "0.1.0"
 description = "Servidor MCP para integração com API Score da Acertpix"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.8"
 dependencies = [
     "mcp>=1.6.0",
     "httpx>=0.28.1",
     "pydantic>=2.10.4",
     "python-dotenv>=1.0.1",
     "requests>=2.31.0",
-    "uvicorn[standard]>=0.29.0",
-    "fastapi>=0.115.12",
 ]
 [[project.authors]]
 name = "Marcelo Cabral Ghilardi"
