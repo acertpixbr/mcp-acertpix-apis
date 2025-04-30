@@ -4,8 +4,9 @@ from typing import Optional, Dict, Any # Adicionado Dict, Any para type hints
 import httpx # Adicionado para chamadas HTTP assíncronas
 import uvicorn # Necessário para rodar o servidor ASGI
 import os # Para carregar variáveis de ambiente (opcional, mas bom)
+import base64 # Para codificar imagens em base64
 from dotenv import load_dotenv # Para carregar .env (opcional)
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request 
 
 # Importações da biblioteca MCP - Usando FastMCP 
 from mcp.server.fastmcp import FastMCP
@@ -157,31 +158,62 @@ async def consultar_score(chave: str) -> Dict[str, Any]:
         return {"status": "erro", "mensagem": f"Erro ao consultar score: {str(e)}"}
 
 @mcp.tool()
-async def enviar_score(chave: str, cpf: Optional[str], ImagemFrenteBase64: str, ImagemVersoBase64: Optional[str], ImagemSelfieBase64: Optional[str], ImagemQrCodeBase64: Optional[str] ) -> Dict[str, Any]:
+async def enviar_score(chave: str, cpf: Optional[str], ImagemFrentePath: str , ImagemVersoPath: Optional[str], ImagemSelfiePath: Optional[str], ImagemQrCodePath: Optional[str] ) -> Dict[str, Any]:
     """
     Envia Analise para Score na API da Acertpix.
     Os campos são:
     - chave: Chave de acesso da conta do cliente (Obrigario)
-    - ImagemFrenteBase64: Imagem da frente do documento do cliente em Base64 (Obrigatorio)
+    - ImagemFrente: path da imagem da frente do documento do cliente  (Obrigatorio)
     - cpf: CPF do cliente
-    - ImagemFrenteBase64: Imagem da frente do documento do cliente em Base64
-    - ImagemVersoBase64: Imagem do verso do documento do cliente em Base64
-    - ImagemSelfieBase64: Imagem da selfie do cliente em Base64
-    - ImagemQrCodeBase64: Imagem do QR Code do cliente em Base64
-    Retorna um dicionário com o status e o resultado (ou mensagem de erro).
+    - ImagemVerso: path da imagem do verso do documento do cliente
+    - ImagemSelfie: path da imagem da selfie do cliente 
+    - ImagemQrCode: path da imagem do QR Code do cliente 
+    Retorna o resultado (ou mensagem de erro).
     """
     print(f"INFO:     Executando ferramenta 'enviar-score' para chave: {chave}, cpf {cpf}")
 
+    # 1. Autenticação (verifica o API-KEY vindo do middleware)
     require_auth()
+
     try:
+
+        # 2. Obter Client ID/Secret (definidos globalmente ou via env var)
+        if not CLIENT_ID or not CLIENT_SECRET:
+             raise ValueError("Client ID ou Client Secret não configurados no servidor.")
 
         client_id = CLIENT_ID
         client_secret = CLIENT_SECRET
 
-        # 1. Obter o token de acesso usando a lógica interna
+        # 3. Obter o token de acesso usando a lógica interna
         access_token = await _internal_get_access_token(client_id, client_secret)
 
-        # 2. Montar a requisição para a API de Score
+        # 4. Converter Imagens para Base64
+        base64_frente_str = None
+        base64_verso_str = None
+        base64_selfie_str = None
+        base64_qrcode_str = None
+
+        if ImagemFrentePath:
+            with open(ImagemFrentePath, "rb") as frente_file:
+                base64_frente_str = base64.b64encode(frente_file.read()).decode('utf-8')
+                print(f"INFO:     Imagem Frente convertida para Base64: {base64_frente_str}")
+        
+        if ImagemVersoPath:
+            with open(ImagemVersoPath, "rb") as verso_file:
+                base64_verso_str = base64.b64encode(verso_file.read()).decode('utf-8')
+                print(f"INFO:     Imagem Verso convertida para Base64: {base64_verso_str}")
+        
+        if ImagemSelfiePath:
+            with open(ImagemSelfiePath, "rb") as selfie_file:
+                base64_selfie_str = base64.b64encode(selfie_file.read()).decode('utf-8')
+                print(f"INFO:     Imagem Selfie convertida para Base64: {base64_selfie_str}")
+        
+        if ImagemQrCodePath:
+            with open(ImagemQrCodePath, "rb") as qrcode_file:
+                base64_qrcode_str = base64.b64encode(qrcode_file.read()).decode('utf-8')
+                print(f"INFO:     Imagem QRCode convertida para Base64: {base64_qrcode_str}")
+
+        # 5. Montar a requisição para a API de Score
         url = f"{API_BASE_URL}{SCORE_ENDPOINT_ENVIO}"
         headers = {
             "Content-Type": "application/json",
@@ -190,31 +222,34 @@ async def enviar_score(chave: str, cpf: Optional[str], ImagemFrenteBase64: str, 
         }
         payload = { # httpx prefere dicts para json
             "Chave": chave,
-            "ImagemFrente": ImagemFrenteBase64,    
-            "ImagemVerso": ImagemVersoBase64,
-            "ImagemSelfie": ImagemSelfieBase64,
-            "ImagemQrCode": ImagemQrCodeBase64,
+            "ImagemFrente": base64_frente_str,    
+            "ImagemVerso": base64_verso_str,
+            "ImagemSelfie": base64_selfie_str,
+            "ImagemQrCode": base64_qrcode_str,
             "CPF": cpf
         }        
+        # Remove chaves com valor None do payload, se a API externa não os aceitar
+        # payload = {k: v for k, v in payload.items() if v is not None}
 
         print(f"INFO:     Consultando score em: {url}")
 
         # 3. Fazer a chamada GET para a API de Score
         async with httpx.AsyncClient(verify=SSL_VERIFY) as client:
-            response = await client.post(url, json=payload, headers=headers)
+            response = await client.post(url, json=payload, headers=headers, timeout=60.0)
             print(f"INFO:     Resposta Token Status: {response.status_code}")
             response.raise_for_status() # Levanta exceção para status >= 400
             score_data = response.json()
 
-        print(f"INFO:     Consulta de score bem-sucedida para chave: {chave}")
+        print(f"INFO:     Envio para score bem-sucedido para chave: {chave}")
         return {
             "status": "sucesso",
             "resultado": score_data
         }
 
     except Exception as e:
-        print(f"ERRO:     Falha na ferramenta 'consultar-score': {e}")
-        return {"status": "erro", "mensagem": f"Erro ao consultar score: {str(e)}"}
+        print(f"ERRO:     Falha geral na ferramenta 'enviar_score': {e}")
+        # Em produção, evite expor detalhes de exceções internas
+        return {"status": "erro", "mensagem": f"Erro interno ao processar 'enviar_score'."}
 
 
 
