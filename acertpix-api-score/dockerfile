@@ -2,7 +2,7 @@
 
 # ---- Estágio Base ----
 # Use uma imagem oficial Python slim como base
-FROM python:3.11-slim as base
+FROM python:3.11-slim AS base
 
 # Defina variáveis de ambiente recomendadas para Python em containers
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -51,4 +51,4 @@ EXPOSE 8000
 
 # Defina o comando para rodar a aplicação
 # Isso usa o script definido em pyproject.toml [project.scripts]
-CMD ["python", "-m", "acertpix_api_score.server"]
+CMD ["python", "-m", "acertpix_api_score"]

@@ -1,11 +1,21 @@
 # Acertpix API Score MCP Server
 
-Servidor MCP para integração com a API Score da Acertpix.
+Servidor MCP para integração com a API SCORE da Acertpix.
+
+## Tabela de Conteúdo
+
+1.  [Funcionalidades](#funcionalidades)
+2.  [Requisitos](#requisitos)
+3.  [Instalação](#instalação)
+4.  [Uso](#uso)
+5.  [Exemplo de Uso](#exemplo-de-uso)
+6.  [Configuração](#configuração)
+7.  [Informações da API](#informações-da-api)
+8.  [Licença](#licença)
 
 ## Funcionalidades
 
-- Consulta de score por CPF
-- Autenticação OAuth2 com client_id e client_secret
+-   **Consulta de score por chave:** Permite consultar o score da  analise no documento de uma pessoa física.
 
 ## Requisitos
 
@@ -14,41 +24,93 @@ Servidor MCP para integração com a API Score da Acertpix.
 
 ## Instalação
 
-```bash
-pip install -e .
+1.  Clone este repositório:
+
+    ```bash
+    git clone <repository_url>
+    cd acertpix-api-score
+    ```
+
+2.  Instale os pacotes:
+
+    ```bash
+    pip install -e .
+    ```
+
+3. Para usar Docker, build a imagem
+
+    ```bash
+    docker build -t acertpix-api-score .
+    ```
+
+4. Precisa informar as variáveis de ambiente:
+
+    ```bash
+    ACERTPIX_API_URL=https://devapi.plataformaacertpix.com.br (ou para produção: https://api.plataformaacertpix.com.br)
+    ACERTPIX_CLIENT_ID=clientId credenciais de acesso da API
+    ACERTPIX_CLIENT_SECRET=clientSecret credenciais de acesso da API
+    ACERTPIX_API_SSL_VERIFY=false (depende se for ambiente de teste)
+    ```
+
+Obs: também pode utilizar .env ou direto no "run" do docker
+
+## Exemplo de Uso 
+
+### MCP no VSCode 
+
+Arquivo de configuração mcp.json, configuração para acesso por docker ou direto no código.
+
+```json
+{
+    "servers": {
+        "acertpix-api-score-docker": {
+            "type": "stdio",
+            "command": "docker",
+            "args": ["run", "-i", 
+            "-e","MCP_API_KEY=bff37c482a6d42b7b4a1f6045dff6d63",
+            "-e","ACERTPIX_API_URL=https://devapi.plataformaacertpix.com.br",
+            "-e","ACERTPIX_CLIENT_ID=xxxxxx",
+            "-e","ACERTPIX_CLIENT_SECRET=yyyyyyy",
+            "-e","ACERTPIX_API_SSL_VERIFY=false",
+            "--rm", 
+            "-p", "8000:8000", "acertpix-api-score"]
+        },
+        "acertpix-api-score-src": {
+            "command": "python",
+            "args": [
+                "-m",
+                "acertpix_api_score"
+            ]
+        },        
+    }
+}
 ```
 
-## Uso
-
-O servidor MCP expõe uma ferramenta chamada `consultar-score` que pode ser usada para consultar o score de um CPF.
-
-Parâmetros necessários:
-- `cpf`: CPF a ser consultado
-- `client_id`: Client ID da API
-- `client_secret`: Client Secret da API
-
-## Exemplo de Uso
+### Em Python
 
 ```python
-# Exemplo de chamada à ferramenta
+# Exemplo de chamada à ferramenta (para referência)
 resultado = await server.call_tool("consultar-score", {
-    "cpf": "12345678900",
-    "client_id": "seu_client_id",
-    "client_secret": "seu_client_secret"
+    "chave": "12345678900"
 })
 ```
 
 ## Configuração
 
-O servidor se conecta à API da Acertpix em `https://api.plataformaacertpix.com.br`.
+O servidor se conecta à API da Acertpix. 
+Para configurar a autenticação OAuth2, defina as seguintes variáveis de ambiente:
+
+-   `ACERTPIX_CLIENT_ID`: Client ID da API Acertpix.
+-   `ACERTPIX_CLIENT_SECRET`: Client Secret da API Acertpix.
+
+-   `ACERTPIX_API_URL`: Url da API do Ambiente
+-   `ACERTPIX_CLIENT_ID`: Client ID da API Acertpix.
+-   `ACERTPIX_CLIENT_SECRET`: Client Secret da API Acertpix.
+-   `ACERTPIX_API_SSL_VERIFY`: Verificação de SSL
+
+## Informações da API
+https://docs.acertpix.com.br/ 
 
 ## Licença
 
 Proprietário - Acertpix
-
-
-## Documentação MCP VSCode
-https://code.visualstudio.com/docs/copilot/chat/mcp-servers
-
-## Biblioteca basica para criação de servidores MCP com Python 
-https://github.com/modelcontextprotocol/create-python-server
