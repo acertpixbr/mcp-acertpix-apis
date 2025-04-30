@@ -2,7 +2,7 @@
 
 # ---- Estágio Base ----
 # Use uma imagem oficial Python slim como base
-FROM python:3.11-slim as base
+FROM python:3.11-slim AS base
 
 # Defina variáveis de ambiente recomendadas para Python em containers
 ENV PYTHONDONTWRITEBYTECODE=1 \

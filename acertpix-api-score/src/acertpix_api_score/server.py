@@ -3,24 +3,41 @@ import json
 from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field, AnyUrl
 import requests
+import httpx # Adicionado para chamadas HTTP assíncronas
+
+import os # Para carregar variáveis de ambiente (opcional, mas bom)
+from dotenv import load_dotenv # Para carregar .env (opcional)
 
 from mcp.server.models import InitializationOptions
 import mcp.types as types
 from mcp.server import NotificationOptions, Server
 import mcp.server.stdio
 
+# Carrega variáveis de ambiente de um arquivo .env (opcional)
+load_dotenv()
+
 # Configurações da API
-API_BASE_URL = "https://testapi.plataformaacertpix.com.br"
+API_BASE_URL = os.getenv("ACERTPIX_API_URL", "https://devapi.plataformaacertpix.com.br")
+CLIENT_ID = os.getenv("ACERTPIX_CLIENT_ID", "acertpix-api")
+CLIENT_SECRET = os.getenv("ACERTPIX_CLIENT_SECRET", "acertpix-api")
+SSL_VERIFY = os.getenv("ACERTPIX_API_SSL_VERIFY", "false").lower() != "true"
+
+print(f"INFO:     Iniciando API Score Acertpix Score")
+print(f"INFO:     API Base URL: {API_BASE_URL}")
+print(f"INFO:     Client ID: {CLIENT_ID}")
+print(f"INFO:     Client Secret: {CLIENT_SECRET}")
+print(f"INFO:     SSL Verify: {SSL_VERIFY}")
+
 TOKEN_ENDPOINT = "/OAuth2/Token"
 SCORE_ENDPOINT = "/Score/Consultar"
 
-class AuthCredentials(BaseModel):
-    client_id: str = Field(..., description="Client ID da API")
-    client_secret: str = Field(..., description="Client Secret da API")
+# class AuthCredentials(BaseModel):
+#     client_id: str = Field(..., description="Client ID da API")
+#     client_secret: str = Field(..., description="Client Secret da API")
 
-class ScoreRequest(BaseModel):
-    chave: str = Field(..., description="Chave para consulta de score")
-    credentials: AuthCredentials = Field(..., description="Credenciais de autenticação")
+# class ScoreRequest(BaseModel):
+#     chave: str = Field(..., description="Chave para consulta de score")
+#     credentials: AuthCredentials = Field(..., description="Credenciais de autenticação")
 
 server = Server("acertpix-api-score")
 
@@ -37,65 +54,106 @@ async def handle_list_tools() -> list[types.Tool]:
                 "type": "object",
                 "properties": {
                     "chave": {"type": "string"},
-                    "client_id": {"type": "string"},
-                    "client_secret": {"type": "string"}
                 },
-                "required": ["chave", "client_id", "client_secret"]
+                "required": ["chave"]
             },
         ),
-        types.Tool(
-            name="gerar-token",
-            description="Gera um token de acesso na API da Acertpix",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "client_id": {"type": "string"},
-                    "client_secret": {"type": "string"}
-                },
-                "required": ["client_id", "client_secret"]
-            },
-        )
+        # types.Tool(
+        #     name="gerar-token",
+        #     description="Gera um token de acesso na API da Acertpix",
+        #     inputSchema={
+        #         "type": "object",
+        #         "properties": {
+        #             "client_id": {"type": "string"},
+        #             "client_secret": {"type": "string"}
+        #         },
+        #         "required": ["client_id", "client_secret"]
+        #     },
+        # )
     ]
 
-async def get_access_token(client_id: str, client_secret: str) -> str:
+async def _internal_get_access_token(client_id: str, client_secret: str) -> str:
     """
-    Obtém o token de acesso da API.
+    Lógica interna para obter o token de acesso da API.
+    Chamada pelas ferramentas que precisam de autenticação.
+    Levanta exceção em caso de erro.
     """
     url = f"{API_BASE_URL}{TOKEN_ENDPOINT}"
-    
-    payload = json.dumps({
+    payload = { # httpx prefere dicts para json
         "Scope": "api",
         "GrantType": "client_credentials",
         "ClientId": client_id,
         "ClientSecret": client_secret
-    })
-    
-    print(f"URL: {url}")
-    print(f"Payload: {payload}")
-    
-    headers = {
-        "Content-Type": "application/json"
     }
-    
-    print(f"Headers: {headers}")
-    
-    response = requests.request("POST", url, headers=headers, data=payload, verify=False)
-    
-    print(f"Response status: {response.status_code}")
-    print(f"Response text: {response.text}")
-    
-    if response.status_code != 200:
-        raise Exception(f"Erro na requisição Token: {response.status_code} - {response.text} - {url}")
-    
-    token = response.json()["access_token"]
-    print(f"\nToken gerado com sucesso: {token}\n")
-    return token
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
 
-async def consultar_score(chave: str, client_id: str, client_secret: str) -> Dict[str, Any]:
+    print(f"INFO:     Tentando obter token de: {url}")
+
+    async with httpx.AsyncClient(verify=SSL_VERIFY) as client:
+        try:
+            response = await client.post(url, json=payload, headers=headers)
+            print(f"INFO:     Resposta Token Status: {response.status_code}")
+
+            response.raise_for_status() # Levanta exceção para status >= 400
+
+            token_data = response.json()
+            if "access_token" not in token_data:
+                raise ValueError(f"Campo 'access_token' não encontrado na resposta da API de Token: {token_data}")
+
+            token = token_data["access_token"]
+            print(f"INFO:     Token obtido com sucesso (prefixo): {token[:10]}...")
+            return token
+        except httpx.RequestError as e:
+            print(f"ERRO:     Erro de rede ao obter token: {e}")
+            raise Exception(f"Erro de rede ao conectar com {e.request.url!r}: {e}") from e
+        except httpx.HTTPStatusError as e:
+            print(f"ERRO:     Erro HTTP ao obter token: {e.response.status_code} - {e.response.text}")
+            raise Exception(f"Erro HTTP {e.response.status_code} da API de Token: {e.response.text}") from e
+        except (json.JSONDecodeError, ValueError, KeyError) as e:
+            print(f"ERRO:     Erro ao processar resposta do token: {e}")
+            raise Exception(f"Erro ao processar resposta da API de Token: {e}") from e
+
+# async def get_access_token(client_id: str, client_secret: str) -> str:
+#     """
+#     Obtém o token de acesso da API.
+#     """
+#     url = f"{API_BASE_URL}{TOKEN_ENDPOINT}"
+    
+#     payload = json.dumps({
+#         "Scope": "api",
+#         "GrantType": "client_credentials",
+#         "ClientId": client_id,
+#         "ClientSecret": client_secret
+#     })
+    
+#     print(f"URL: {url}")
+#     print(f"Payload: {payload}")
+    
+#     headers = {
+#         "Content-Type": "application/json"
+#     }
+    
+#     print(f"Headers: {headers}")
+    
+#     response = requests.request("POST", url, headers=headers, data=payload, verify=False)
+    
+#     print(f"Response status: {response.status_code}")
+#     print(f"Response text: {response.text}")
+    
+#     if response.status_code != 200:
+#         raise Exception(f"Erro na requisição Token: {response.status_code} - {response.text} - {url}")
+    
+#     token = response.json()["access_token"]
+#     print(f"\nToken gerado com sucesso: {token}\n")
+#     return token
+
+async def consultar_score(chave: str) -> Dict[str, Any]:
     """
     Consulta o score de uma chave na API.
     """
-    access_token = await get_access_token(client_id, client_secret)
+    # access_token = await get_access_token(client_id, client_secret)
+    # 1. Obter o token de acesso usando a lógica interna
+    access_token = await _internal_get_access_token(CLIENT_ID, CLIENT_SECRET)
     print(f"\nToken gerado: {access_token}\n")
     
     url = f"{API_BASE_URL}{SCORE_ENDPOINT}?chave={chave}"
@@ -127,39 +185,40 @@ async def handle_call_tool(
     if not arguments:
         raise ValueError("Argumentos ausentes")
 
-    if name == "gerar-token":
-        client_id = arguments.get("client_id")
-        client_secret = arguments.get("client_secret")
+    # if name == "gerar-token":
+    #     client_id = arguments.get("client_id")
+    #     client_secret = arguments.get("client_secret")
 
-        if not all([client_id, client_secret]):
-            raise ValueError("client_id e client_secret são obrigatórios")
+    #     if not all([client_id, client_secret]):
+    #         raise ValueError("client_id e client_secret são obrigatórios")
 
-        try:
-            token = await get_access_token(client_id, client_secret)
-            return [
-                types.TextContent(
-                    type="text",
-                    text=f"Token gerado com sucesso:\n{token}"
-                )
-            ]
-        except Exception as e:
-            return [
-                types.TextContent(
-                    type="text",
-                    text=f"Erro ao gerar token: {str(e)}\nURL: {API_BASE_URL}"
-                )
-            ]
+    #     try:
+    #         token = await get_access_token(client_id, client_secret)
+    #         return [
+    #             types.TextContent(
+    #                 type="text",
+    #                 text=f"Token gerado com sucesso:\n{token}"
+    #             )
+    #         ]
+    #     except Exception as e:
+    #         return [
+    #             types.TextContent(
+    #                 type="text",
+    #                 text=f"Erro ao gerar token: {str(e)}\nURL: {API_BASE_URL}"
+    #             )
+    #         ]
     
-    elif name == "consultar-score":
+    # el
+    if name == "consultar-score":
         chave = arguments.get("chave")
-        client_id = arguments.get("client_id")
-        client_secret = arguments.get("client_secret")
+        # client_id = arguments.get("client_id")
+        # client_secret = arguments.get("client_secret")
 
-        if not all([chave, client_id, client_secret]):
-            raise ValueError("Chave, client_id e client_secret são obrigatórios")
+        if not all([chave]):
+            raise ValueError("Chave é obrigatória")
 
         try:
-            resultado = await consultar_score(chave, client_id, client_secret)
+            resultado = await consultar_score(chave)
             return [
                 types.TextContent(
                     type="text",
