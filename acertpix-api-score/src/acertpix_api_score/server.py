@@ -31,14 +31,6 @@ print(f"INFO:     SSL Verify: {SSL_VERIFY}")
 TOKEN_ENDPOINT = "/OAuth2/Token"
 SCORE_ENDPOINT = "/Score/Consultar"
 
-# class AuthCredentials(BaseModel):
-#     client_id: str = Field(..., description="Client ID da API")
-#     client_secret: str = Field(..., description="Client Secret da API")
-
-# class ScoreRequest(BaseModel):
-#     chave: str = Field(..., description="Chave para consulta de score")
-#     credentials: AuthCredentials = Field(..., description="Credenciais de autenticação")
-
 server = Server("acertpix-api-score")
 
 @server.list_tools()
@@ -58,18 +50,7 @@ async def handle_list_tools() -> list[types.Tool]:
                 "required": ["chave"]
             },
         ),
-        # types.Tool(
-        #     name="gerar-token",
-        #     description="Gera um token de acesso na API da Acertpix",
-        #     inputSchema={
-        #         "type": "object",
-        #         "properties": {
-        #             "client_id": {"type": "string"},
-        #             "client_secret": {"type": "string"}
-        #         },
-        #         "required": ["client_id", "client_secret"]
-        #     },
-        # )
+
     ]
 
 async def _internal_get_access_token(client_id: str, client_secret: str) -> str:
@@ -113,39 +94,7 @@ async def _internal_get_access_token(client_id: str, client_secret: str) -> str:
             print(f"ERRO:     Erro ao processar resposta do token: {e}")
             raise Exception(f"Erro ao processar resposta da API de Token: {e}") from e
 
-# async def get_access_token(client_id: str, client_secret: str) -> str:
-#     """
-#     Obtém o token de acesso da API.
-#     """
-#     url = f"{API_BASE_URL}{TOKEN_ENDPOINT}"
-    
-#     payload = json.dumps({
-#         "Scope": "api",
-#         "GrantType": "client_credentials",
-#         "ClientId": client_id,
-#         "ClientSecret": client_secret
-#     })
-    
-#     print(f"URL: {url}")
-#     print(f"Payload: {payload}")
-    
-#     headers = {
-#         "Content-Type": "application/json"
-#     }
-    
-#     print(f"Headers: {headers}")
-    
-#     response = requests.request("POST", url, headers=headers, data=payload, verify=False)
-    
-#     print(f"Response status: {response.status_code}")
-#     print(f"Response text: {response.text}")
-    
-#     if response.status_code != 200:
-#         raise Exception(f"Erro na requisição Token: {response.status_code} - {response.text} - {url}")
-    
-#     token = response.json()["access_token"]
-#     print(f"\nToken gerado com sucesso: {token}\n")
-#     return token
+
 
 async def consultar_score(chave: str) -> Dict[str, Any]:
     """
@@ -183,17 +132,6 @@ async def consultar_score(chave: str) -> Dict[str, Any]:
             "resultado": score_data
         }
 
-        # payload = {}
-        
-        # response = requests.request("GET", url, headers=headers, data=payload, verify=False)
-        
-        # print(f"Score response status: {response.status_code}")
-        # print(f"Score response text: {response.text}")
-        
-        # if response.status_code != 200:
-        #     raise Exception(f"Erro na requisição Consula: {response.status_code} - {response.text} - {url}")
-        
-        # return response.json()
     
     except Exception as e:
         print(f"ERRO:     Falha na ferramenta 'consultar-score': {e}")
@@ -210,34 +148,9 @@ async def handle_call_tool(
     if not arguments:
         raise ValueError("Argumentos ausentes")
 
-    # if name == "gerar-token":
-    #     client_id = arguments.get("client_id")
-    #     client_secret = arguments.get("client_secret")
-
-    #     if not all([client_id, client_secret]):
-    #         raise ValueError("client_id e client_secret são obrigatórios")
-
-    #     try:
-    #         token = await get_access_token(client_id, client_secret)
-    #         return [
-    #             types.TextContent(
-    #                 type="text",
-    #                 text=f"Token gerado com sucesso:\n{token}"
-    #             )
-    #         ]
-    #     except Exception as e:
-    #         return [
-    #             types.TextContent(
-    #                 type="text",
-    #                 text=f"Erro ao gerar token: {str(e)}\nURL: {API_BASE_URL}"
-    #             )
-    #         ]
-    
-    # el
+   
     if name == "consultar-score":
         chave = arguments.get("chave")
-        # client_id = arguments.get("client_id")
-        # client_secret = arguments.get("client_secret")
 
         if not all([chave]):
             raise ValueError("Chave é obrigatória")
