@@ -1,198 +1,253 @@
 import asyncio
 import json
-from typing import Optional, Dict, Any
-from pydantic import BaseModel, Field, AnyUrl
-import requests
+from typing import Optional, Dict, Any # Adicionado Dict, Any para type hints
+import httpx # Adicionado para chamadas HTTP assíncronas
+import uvicorn # Necessário para rodar o servidor ASGI
+import os # Para carregar variáveis de ambiente (opcional, mas bom)
+from dotenv import load_dotenv # Para carregar .env (opcional)
+from fastapi import FastAPI, Request
 
-from mcp.server.models import InitializationOptions
+# Importações da biblioteca MCP - Usando FastMCP 
+from mcp.server.fastmcp import FastMCP
 import mcp.types as types
-from mcp.server import NotificationOptions, Server
-import mcp.server.stdio
 
-# Configurações da API
-API_BASE_URL = "https://testapi.plataformaacertpix.com.br"
+# Carrega variáveis de ambiente de um arquivo .env (opcional)
+# load_dotenv()
+
+# Configurações da API - mantidas do código original
+# É uma boa prática carregar URLs de variáveis de ambiente
+API_BASE_URL = os.getenv("ACERTPIX_API_URL", "https://devapi.plataformaacertpix.com.br")
+CLIENT_ID = os.getenv("ACERTPIX_CLIENT_ID", "acertpix-api")
+CLIENT_SECRET = os.getenv("ACERTPIX_CLIENT_SECRET", "acertpix-api")
+MCP_API_KEY = os.getenv("MCP_API_KEY", "chave-segura")
+# NOTA: Usando httpx.AsyncClient para chamadas de rede assíncronas.
+# NOTA: A questão de 'verify=False' (desabilitar verificação SSL) ainda é um risco de segurança.
+#       Idealmente, configure a verificação corretamente ou use variáveis de ambiente para controlar.
+SSL_VERIFY = os.getenv("ACERTPIX_API_SSL_VERIFY", "false").lower() != "true" # Exemplo: default False se não definido como true
+
+print(f"INFO:     Iniciando API Score Acertpix Score com FastMCP...")
+print(f"INFO:     API Base URL: {API_BASE_URL}")
+print(f"INFO:     Client ID: {CLIENT_ID}")
+print(f"INFO:     Client Secret: {CLIENT_SECRET}")
+print(f"INFO:     MCP API Key: {MCP_API_KEY}")
+print(f"INFO:     SSL Verify: {SSL_VERIFY}")
+
 TOKEN_ENDPOINT = "/OAuth2/Token"
-SCORE_ENDPOINT = "/Score/Consultar"
+SCORE_ENDPOINT_CONSULTA = "/Score/Consultar"
+SCORE_ENDPOINT_ENVIO = "/Score/Enviar"
 
-class AuthCredentials(BaseModel):
-    client_id: str = Field(..., description="Client ID da API")
-    client_secret: str = Field(..., description="Client Secret da API")
+# Global variable to keep a token a for a request
+auth_token = ""
+app = FastAPI()
 
-class ScoreRequest(BaseModel):
-    chave: str = Field(..., description="Chave para consulta de score")
-    credentials: AuthCredentials = Field(..., description="Credenciais de autenticação")
+# --- Instância do Servidor FastMCP ---
+mcp = FastMCP("acertpix-api-score")
 
-server = Server("acertpix-api-score")
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    auth_header = request.headers.get("api-key")
+    if auth_header:
+        print(f"DEBUG:    Auth Header: {auth_header}")
+        # extract token from the header and keep it in the global variable
+        global auth_token
+        auth_token = auth_header
+    
+    response = await call_next(request)
+    
+    return response
 
-@server.list_tools()
-async def handle_list_tools() -> list[types.Tool]:
+def require_auth():
     """
-    Lista as ferramentas disponíveis para interação com a API Score.
+    Check access and raise an error if the token is not valid.
     """
-    return [
-        types.Tool(
-            name="consultar-score",
-            description="Consulta o score de uma chave na API da Acertpix",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "chave": {"type": "string"},
-                    "client_id": {"type": "string"},
-                    "client_secret": {"type": "string"}
-                },
-                "required": ["chave", "client_id", "client_secret"]
-            },
-        ),
-        types.Tool(
-            name="gerar-token",
-            description="Gera um token de acesso na API da Acertpix",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "client_id": {"type": "string"},
-                    "client_secret": {"type": "string"}
-                },
-                "required": ["client_id", "client_secret"]
-            },
-        )
-    ]
+    print(f"DEBUG:    Auth Header: {auth_token}")
+     
+    if auth_token != MCP_API_KEY:
+       raise ValueError("Invalid MCP Server Token Access")
+    return None
 
-async def get_access_token(client_id: str, client_secret: str) -> str:
+# --- Funções Auxiliares (Refatoradas para serem chamadas pelas ferramentas) ---
+
+async def _internal_get_access_token(client_id: str, client_secret: str) -> str:
     """
-    Obtém o token de acesso da API.
+    Lógica interna para obter o token de acesso da API.
+    Chamada pelas ferramentas que precisam de autenticação.
+    Levanta exceção em caso de erro.
     """
     url = f"{API_BASE_URL}{TOKEN_ENDPOINT}"
-    
-    payload = json.dumps({
+    payload = { # httpx prefere dicts para json
         "Scope": "api",
         "GrantType": "client_credentials",
         "ClientId": client_id,
         "ClientSecret": client_secret
-    })
-    
-    print(f"URL: {url}")
-    print(f"Payload: {payload}")
-    
-    headers = {
-        "Content-Type": "application/json"
     }
-    
-    print(f"Headers: {headers}")
-    
-    response = requests.request("POST", url, headers=headers, data=payload, verify=False)
-    
-    print(f"Response status: {response.status_code}")
-    print(f"Response text: {response.text}")
-    
-    if response.status_code != 200:
-        raise Exception(f"Erro na requisição Token: {response.status_code} - {response.text} - {url}")
-    
-    token = response.json()["access_token"]
-    print(f"\nToken gerado com sucesso: {token}\n")
-    return token
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
 
-async def consultar_score(chave: str, client_id: str, client_secret: str) -> Dict[str, Any]:
-    """
-    Consulta o score de uma chave na API.
-    """
-    access_token = await get_access_token(client_id, client_secret)
-    print(f"\nToken gerado: {access_token}\n")
-    
-    url = f"{API_BASE_URL}{SCORE_ENDPOINT}?chave={chave}"
-    
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {access_token}",
-    }
-    
-    payload = {}
-    
-    response = requests.request("GET", url, headers=headers, data=payload, verify=False)
-    
-    print(f"Score response status: {response.status_code}")
-    print(f"Score response text: {response.text}")
-    
-    if response.status_code != 200:
-        raise Exception(f"Erro na requisição Consula: {response.status_code} - {response.text} - {url}")
-    
-    return response.json()
+    print(f"INFO:     Tentando obter token de: {url}")
 
-@server.call_tool()
-async def handle_call_tool(
-    name: str, arguments: dict | None
-) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
-    """
-    Manipula as chamadas às ferramentas disponíveis.
-    """
-    if not arguments:
-        raise ValueError("Argumentos ausentes")
-
-    if name == "gerar-token":
-        client_id = arguments.get("client_id")
-        client_secret = arguments.get("client_secret")
-
-        if not all([client_id, client_secret]):
-            raise ValueError("client_id e client_secret são obrigatórios")
-
+    async with httpx.AsyncClient(verify=SSL_VERIFY) as client:
         try:
-            token = await get_access_token(client_id, client_secret)
-            return [
-                types.TextContent(
-                    type="text",
-                    text=f"Token gerado com sucesso:\n{token}"
-                )
-            ]
-        except Exception as e:
-            return [
-                types.TextContent(
-                    type="text",
-                    text=f"Erro ao gerar token: {str(e)}\nURL: {API_BASE_URL}"
-                )
-            ]
-    
-    elif name == "consultar-score":
-        chave = arguments.get("chave")
-        client_id = arguments.get("client_id")
-        client_secret = arguments.get("client_secret")
+            response = await client.post(url, json=payload, headers=headers)
+            print(f"INFO:     Resposta Token Status: {response.status_code}")
 
-        if not all([chave, client_id, client_secret]):
-            raise ValueError("Chave, client_id e client_secret são obrigatórios")
+            response.raise_for_status() # Levanta exceção para status >= 400
 
-        try:
-            resultado = await consultar_score(chave, client_id, client_secret)
-            return [
-                types.TextContent(
-                    type="text",
-                    text=f"Resultado da consulta de score para chave {chave}:\n{resultado}"
-                )
-            ]
-        except Exception as e:
-            return [
-                types.TextContent(
-                    type="text",
-                    text=f"Erro ao consultar score: {str(e)}\nURL: {API_BASE_URL}"
-                )
-            ]
-    else:
-        raise ValueError(f"Ferramenta desconhecida: {name}")
+            token_data = response.json()
+            if "access_token" not in token_data:
+                raise ValueError(f"Campo 'access_token' não encontrado na resposta da API de Token: {token_data}")
 
-async def main():
+            token = token_data["access_token"]
+            print(f"INFO:     Token obtido com sucesso (prefixo): {token[:10]}...")
+            return token
+        except httpx.RequestError as e:
+            print(f"ERRO:     Erro de rede ao obter token: {e}")
+            raise Exception(f"Erro de rede ao conectar com {e.request.url!r}: {e}") from e
+        except httpx.HTTPStatusError as e:
+            print(f"ERRO:     Erro HTTP ao obter token: {e.response.status_code} - {e.response.text}")
+            raise Exception(f"Erro HTTP {e.response.status_code} da API de Token: {e.response.text}") from e
+        except (json.JSONDecodeError, ValueError, KeyError) as e:
+            print(f"ERRO:     Erro ao processar resposta do token: {e}")
+            raise Exception(f"Erro ao processar resposta da API de Token: {e}") from e
+
+
+# --- Definições de Ferramentas (Usando @mcp.tool) ---
+@mcp.tool()
+async def consultar_score(chave: str) -> Dict[str, Any]:
     """
-    Inicia o servidor MCP.
+    Consulta o score de uma chave na API da Acertpix.
+    Retorna um dicionário com o status e o resultado (ou mensagem de erro).
     """
-    async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
-        await server.run(
-            read_stream,
-            write_stream,
-            InitializationOptions(
-                server_name="acertpix-api-score",
-                server_version="0.1.0",
-                capabilities=server.get_capabilities(
-                    notification_options=NotificationOptions(),
-                    experimental_capabilities={},
-                ),
-            ),
-        )
+    print(f"INFO:     Executando ferramenta 'consultar-score' para chave: {chave}")
 
+    require_auth()
+    try:
+
+        client_id = CLIENT_ID
+        client_secret = CLIENT_SECRET
+
+        # 1. Obter o token de acesso usando a lógica interna
+        access_token = await _internal_get_access_token(client_id, client_secret)
+
+        # 2. Montar a requisição para a API de Score
+        url = f"{API_BASE_URL}{SCORE_ENDPOINT_CONSULTA}"
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Bearer {access_token}",
+        }
+        params = {"chave": chave} # Parâmetros GET vão em 'params' com httpx
+
+        print(f"INFO:     Consultando score em: {url}")
+
+        # 3. Fazer a chamada GET para a API de Score
+        async with httpx.AsyncClient(verify=SSL_VERIFY) as client:
+            response = await client.get(url, headers=headers, params=params)
+            print(f"INFO:     Resposta Score Status: {response.status_code}")
+            response.raise_for_status() # Levanta exceção para status >= 400
+            score_data = response.json()
+
+        print(f"INFO:     Consulta de score bem-sucedida para chave: {chave}")
+        return {
+            "status": "sucesso",
+            "resultado": score_data
+        }
+
+    except Exception as e:
+        print(f"ERRO:     Falha na ferramenta 'consultar-score': {e}")
+        return {"status": "erro", "mensagem": f"Erro ao consultar score: {str(e)}"}
+
+@mcp.tool()
+async def enviar_score(chave: str, cpf: Optional[str], ImagemFrenteBase64: str, ImagemVersoBase64: Optional[str], ImagemSelfieBase64: Optional[str], ImagemQrCodeBase64: Optional[str] ) -> Dict[str, Any]:
+    """
+    Envia Analise para Score na API da Acertpix.
+    Os campos são:
+    - chave: Chave de acesso da conta do cliente (Obrigario)
+    - ImagemFrenteBase64: Imagem da frente do documento do cliente em Base64 (Obrigatorio)
+    - cpf: CPF do cliente
+    - ImagemFrenteBase64: Imagem da frente do documento do cliente em Base64
+    - ImagemVersoBase64: Imagem do verso do documento do cliente em Base64
+    - ImagemSelfieBase64: Imagem da selfie do cliente em Base64
+    - ImagemQrCodeBase64: Imagem do QR Code do cliente em Base64
+    Retorna um dicionário com o status e o resultado (ou mensagem de erro).
+    """
+    print(f"INFO:     Executando ferramenta 'enviar-score' para chave: {chave}, cpf {cpf}")
+
+    require_auth()
+    try:
+
+        client_id = CLIENT_ID
+        client_secret = CLIENT_SECRET
+
+        # 1. Obter o token de acesso usando a lógica interna
+        access_token = await _internal_get_access_token(client_id, client_secret)
+
+        # 2. Montar a requisição para a API de Score
+        url = f"{API_BASE_URL}{SCORE_ENDPOINT_ENVIO}"
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Bearer {access_token}",
+        }
+        payload = { # httpx prefere dicts para json
+            "Chave": chave,
+            "ImagemFrente": ImagemFrenteBase64,    
+            "ImagemVerso": ImagemVersoBase64,
+            "ImagemSelfie": ImagemSelfieBase64,
+            "ImagemQrCode": ImagemQrCodeBase64,
+            "CPF": cpf
+        }        
+
+        print(f"INFO:     Consultando score em: {url}")
+
+        # 3. Fazer a chamada GET para a API de Score
+        async with httpx.AsyncClient(verify=SSL_VERIFY) as client:
+            response = await client.post(url, json=payload, headers=headers)
+            print(f"INFO:     Resposta Token Status: {response.status_code}")
+            response.raise_for_status() # Levanta exceção para status >= 400
+            score_data = response.json()
+
+        print(f"INFO:     Consulta de score bem-sucedida para chave: {chave}")
+        return {
+            "status": "sucesso",
+            "resultado": score_data
+        }
+
+    except Exception as e:
+        print(f"ERRO:     Falha na ferramenta 'consultar-score': {e}")
+        return {"status": "erro", "mensagem": f"Erro ao consultar score: {str(e)}"}
+
+
+
+# --- Criação da Aplicação ASGI/SSE a partir do FastMCP ---
+# FastMCP deve ter o método sse_app() conforme a documentação
+try:
+    app.mount("/", mcp.sse_app())
+    #asgi_app = mcp.sse_app()
+    print("INFO:     Aplicação ASGI/SSE criada a partir do objeto FastMCP.")
+except AttributeError:
+     # Isso não deveria acontecer se estivermos usando FastMCP corretamente
+    print("ERRO:     O objeto FastMCP não possui o método sse_app(). Verifique a versão da lib mcp.")
+    asgi_app = None
+except Exception as e:
+    print(f"ERRO:     Erro inesperado ao criar aplicação ASGI com FastMCP: {e}")
+    asgi_app = None
+
+# --- Bloco para Iniciar com Uvicorn ---
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Verifica se a montagem foi bem-sucedida antes de tentar rodar
+    # (Uma forma simples é verificar se alguma rota foi adicionada além do mount)
+    if len(app.routes) > 0: # A montagem adiciona rotas
+        port = int(os.getenv("PORT", 8000))
+        host = os.getenv("HOST", "0.0.0.0")
+        log_level = os.getenv("LOG_LEVEL", "info")
+
+        print(f"INFO:     Iniciando servidor FastAPI/MCP em http://{host}:{port}")
+        # Executa a aplicação FastAPI 'app' com Uvicorn
+        uvicorn.run(
+            app, # <--- Passa a instância do FastAPI para o Uvicorn
+            host=host,
+            port=port,
+            log_level=log_level
+        )
+    else:
+        print("ERRO:     Aplicação FastAPI não parece ter rotas montadas. Servidor não iniciado.")

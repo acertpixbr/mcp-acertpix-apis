@@ -51,4 +51,4 @@ EXPOSE 8000
 
 # Defina o comando para rodar a aplicação
 # Isso usa o script definido em pyproject.toml [project.scripts]
-CMD ["python", "-m", "acertpix_api_score"]
+CMD ["python", "-m", "acertpix_api_score.server"]
