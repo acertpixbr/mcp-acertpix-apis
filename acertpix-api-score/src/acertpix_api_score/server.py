@@ -2,7 +2,7 @@ import asyncio
 import json
 from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field, AnyUrl
-import requests
+# import requests
 import httpx # Adicionado para chamadas HTTP assíncronas
 
 import os # Para carregar variáveis de ambiente (opcional, mas bom)
@@ -151,29 +151,54 @@ async def consultar_score(chave: str) -> Dict[str, Any]:
     """
     Consulta o score de uma chave na API.
     """
-    # access_token = await get_access_token(client_id, client_secret)
-    # 1. Obter o token de acesso usando a lógica interna
-    access_token = await _internal_get_access_token(CLIENT_ID, CLIENT_SECRET)
-    print(f"\nToken gerado: {access_token}\n")
+    try:
+        # access_token = await get_access_token(client_id, client_secret)
+        # 1. Obter o token de acesso usando a lógica interna
+        access_token = await _internal_get_access_token(CLIENT_ID, CLIENT_SECRET)
+        print(f"\nToken gerado: {access_token}\n")
+        
+        url = f"{API_BASE_URL}{SCORE_ENDPOINT}?chave={chave}"
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Bearer {access_token}",
+        }
+        params = {"chave": chave} # Parâmetros GET vão em 'params' com httpx
+        
+        print(f"INFO:     Consultando score em: {url}")
+
+        # 3. Fazer a chamada GET para a API de Score
+        async with httpx.AsyncClient(verify=SSL_VERIFY) as client:
+            response = await client.get(url, headers=headers, params=params)
+            print(f"INFO:     Resposta Score Status: {response.status_code}")
+            response.raise_for_status() # Levanta exceção para status >= 400
+            score_data = response.json()
+        
+        print(f"Score response status: {response.status_code}")
+        print(f"Score response text: {response.text}")
+        
+        return {
+            "status": "sucesso",
+            "resultado": score_data
+        }
+
+        # payload = {}
+        
+        # response = requests.request("GET", url, headers=headers, data=payload, verify=False)
+        
+        # print(f"Score response status: {response.status_code}")
+        # print(f"Score response text: {response.text}")
+        
+        # if response.status_code != 200:
+        #     raise Exception(f"Erro na requisição Consula: {response.status_code} - {response.text} - {url}")
+        
+        # return response.json()
     
-    url = f"{API_BASE_URL}{SCORE_ENDPOINT}?chave={chave}"
-    
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {access_token}",
-    }
-    
-    payload = {}
-    
-    response = requests.request("GET", url, headers=headers, data=payload, verify=False)
-    
-    print(f"Score response status: {response.status_code}")
-    print(f"Score response text: {response.text}")
-    
-    if response.status_code != 200:
-        raise Exception(f"Erro na requisição Consula: {response.status_code} - {response.text} - {url}")
-    
-    return response.json()
+    except Exception as e:
+        print(f"ERRO:     Falha na ferramenta 'consultar-score': {e}")
+        return {"status": "erro", "mensagem": f"Erro ao consultar score: {str(e)}"}
+
 
 @server.call_tool()
 async def handle_call_tool(
