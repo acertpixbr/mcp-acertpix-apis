@@ -50,6 +50,17 @@ async def handle_list_tools() -> list[types.Tool]:
                 "required": ["chave"]
             },
         ),
+        types.Tool(
+            name="consultar-analise",
+            description="Consultar a Analise de uma chave na API da Acertpix",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "chave": {"type": "string"},
+                },
+                "required": ["chave"]
+            },
+        )
 
     ]
 
@@ -138,6 +149,45 @@ async def consultar_score(chave: str) -> Dict[str, Any]:
         return {"status": "erro", "mensagem": f"Erro ao consultar score: {str(e)}"}
 
 
+async def consultar_analise(chave: str) -> Dict[str, Any]:
+    try:
+        access_token = await _internal_get_access_token(CLIENT_ID, CLIENT_SECRET)
+        print(f"\nToken gerado: {access_token}\n")
+        
+        url = f"{API_BASE_URL}/Analises/Consultar?chave={chave}"
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Bearer {access_token}",
+        }
+        params = {"chave": chave} # Parâmetros GET vão em 'params' com httpx
+        
+        print(f"INFO:     Consultando analise em: {url}")
+
+        # 3. Fazer a chamada GET para a API de Score
+        async with httpx.AsyncClient(verify=SSL_VERIFY) as client:
+            response = await client.get(url, headers=headers, params=params)
+            print(f"INFO:     Resposta Analise Status: {response.status_code}")
+            response.raise_for_status() # Levanta exceção para status >= 400
+            analise_data = response.json()
+        
+        print(f"Analise response status: {response.status_code}")
+        print(f"Analise response text: {response.text}")
+        
+        return {
+            "status": "sucesso",
+            "resultado": analise_data
+        }
+
+
+    except Exception as e:
+        print(f"ERRO:     Falha na ferramenta 'consultar-analise': {e}")
+        return {"status": "erro", "mensagem": f"Erro ao consultar analise: {str(e)}"}
+
+    
+        
+
 @server.call_tool()
 async def handle_call_tool(
     name: str, arguments: dict | None
@@ -148,14 +198,13 @@ async def handle_call_tool(
     if not arguments:
         raise ValueError("Argumentos ausentes")
 
-   
-    if name == "consultar-score":
-        chave = arguments.get("chave")
-
-        if not all([chave]):
-            raise ValueError("Chave é obrigatória")
-
-        try:
+    match name:
+        case "consultar-score":
+         chave = arguments.get("chave") 
+         
+         if not all([chave]):
+           raise ValueError("Chave é obrigatória")
+         try:
             resultado = await consultar_score(chave)
             return [
                 types.TextContent(
@@ -163,15 +212,39 @@ async def handle_call_tool(
                     text=f"Resultado da consulta de score para chave {chave}:\n{resultado}"
                 )
             ]
-        except Exception as e:
-            return [
+         except Exception as e:
+             return [
                 types.TextContent(
                     type="text",
                     text=f"Erro ao consultar score: {str(e)}\nURL: {API_BASE_URL}"
                 )
             ]
-    else:
-        raise ValueError(f"Ferramenta desconhecida: {name}")
+            
+        case "consultar-analise":
+            chave = arguments.get("chave")
+            if not all([chave]):
+                raise ValueError("Chave é obrigatória")
+            
+            try:
+                resultado = await consultar_analise(chave)
+                return [
+                    types.TextContent(
+                    type="text",
+                    text=f"Resultado da consulta de analise para chave {chave}:\n{resultado}"
+                )    
+               ]
+                
+            except Exception as e:
+                return [
+                    types.TextContent(
+                    type="text",
+                    text=f"Erro ao consultar score: {str(e)}\nURL: {API_BASE_URL}"
+                )
+            ]
+                  
+        case _:
+            raise ValueError(f"Ferramenta desconhecida: {name}")
+        
 
 async def main():
     """
