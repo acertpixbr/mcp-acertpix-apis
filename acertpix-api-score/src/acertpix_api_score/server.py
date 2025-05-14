@@ -14,13 +14,13 @@ from mcp.server import NotificationOptions, Server
 import mcp.server.stdio
 
 # Carrega variáveis de ambiente de um arquivo .env (opcional)
-load_dotenv()
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", ".env"))
 
 # Configurações da API
-API_BASE_URL = os.getenv("ACERTPIX_API_URL", "https://devapi.plataformaacertpix.com.br")
+API_BASE_URL = os.getenv("ACERTPIX_API_URL", "https://testapi.plataformaacertpix.com.br")
 CLIENT_ID = os.getenv("ACERTPIX_CLIENT_ID", "acertpix-api")
 CLIENT_SECRET = os.getenv("ACERTPIX_CLIENT_SECRET", "acertpix-api")
-SSL_VERIFY = os.getenv("ACERTPIX_API_SSL_VERIFY", "false").lower() != "true"
+SSL_VERIFY = os.getenv("ACERTPIX_API_SSL_VERIFY", "true").lower() != "true"
 
 print(f"INFO:     Iniciando API Score Acertpix Score")
 print(f"INFO:     API Base URL: {API_BASE_URL}")
