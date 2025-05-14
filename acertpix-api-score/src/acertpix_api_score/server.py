@@ -71,6 +71,17 @@ async def handle_list_tools() -> list[types.Tool]:
                 },
                 "required": ["id"]
             },
+        ),
+         types.Tool(
+            name="obter-laudo-score",
+            description="Consultar o Laudo Score de um Id na API da Acertpix",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "id": {"type": "integer"},
+                },
+                "required": ["id"]
+            },
         )
 
     ]
@@ -115,7 +126,6 @@ async def _internal_get_access_token(client_id: str, client_secret: str) -> str:
         except (json.JSONDecodeError, ValueError, KeyError) as e:
             print(f"ERRO:     Erro ao processar resposta do token: {e}")
             raise Exception(f"Erro ao processar resposta da API de Token: {e}") from e
-
 
 
 async def consultar_score(chave: str) -> Dict[str, Any]:
@@ -233,6 +243,43 @@ async def obter_laudo_analise(id: int) -> Dict[str, Any]:
         print(f"ERRO:     Falha na ferramenta 'obter-laudo-analise': {e}")
         return {"status": "erro", "mensagem": f"Erro ao obter laudo da analise: {str(e)}"}
 
+
+async def obter_laudo_score(id: int) -> Dict[str, Any]:
+    try:
+        access_token = await _internal_get_access_token(CLIENT_ID, CLIENT_SECRET)
+        print(f"\nToken gerado: {access_token}\n")
+        
+        url = f"{API_BASE_URL}/Score/ObterLaudo/{id}"
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Bearer {access_token}",
+        }
+        params = {"id": id} # Parâmetros GET vão em 'params' com httpx
+        
+        print(f"INFO:     Obtendo laudo score em: {url}")
+
+        # 3. Fazer a chamada GET para a API de Score
+        async with httpx.AsyncClient(verify=SSL_VERIFY) as client:
+            response = await client.get(url, headers=headers, params=params)
+            print(f"INFO:     Resposta ObterLaudo score Status: {response.status_code}")
+            response.raise_for_status() # Levanta exceção para status >= 400
+            obter_laudo_score_data = response.json()
+        
+        print(f"ObterLaudo score response status: {response.status_code}")
+        print(f"ObterLaudo score response text: {response.text}")
+        
+        return {
+            "status": "sucesso",
+            "resultado": obter_laudo_score_data
+        }
+
+
+    except Exception as e:
+        print(f"ERRO:     Falha na ferramenta 'obter-laudo-scoree': {e}")
+        return {"status": "erro", "mensagem": f"Erro ao obter laudo score: {str(e)}"}
+
     
 @server.call_tool()
 async def handle_call_tool(
@@ -311,7 +358,30 @@ async def handle_call_tool(
                     text=f"Erro ao obter laudo da analise: {str(e)}\nURL: {API_BASE_URL}"
                 )
             ]
-                        
+                
+        case "obter-laudo-score":
+            
+            id = arguments.get("id")
+            if not all([id]):
+                raise ValueError("Id é obrigatório")
+            
+            try:
+                resultado = await obter_laudo_score(id)
+                return [
+                    types.TextContent(
+                    type="text",
+                    text=f"Resultado da consulta de obter laudo score para id {id}:\n{resultado}"
+                )    
+               ]
+                
+            except Exception as e:
+                return [
+                    types.TextContent(
+                    type="text",
+                    text=f"Erro ao obter laudo score: {str(e)}\nURL: {API_BASE_URL}"
+                )
+            ]        
+                      
         case _:
             raise ValueError(f"Ferramenta desconhecida: {name}")
         
