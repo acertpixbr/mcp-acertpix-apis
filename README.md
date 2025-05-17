@@ -1,4 +1,4 @@
-# MCP Servidores das APIs da Acertpix
+# Servidores MCP das APIs da Acertpix
 
 Este repositório contém servidores MCP (Model Context Protocol) para as APIs da Acertpix. Atualmente, o projeto inclui o seguinte servidor:
 Foi desenvolvido utilizando boas práticas de desenvolvimento e está estruturado para ser facilmente extensível e mantido.
