@@ -1,0 +1,54 @@
+# Dockerfile
+
+# ---- Estágio Base ----
+# Use uma imagem oficial Python slim como base
+FROM python:3.11-slim AS base
+
+# Defina variáveis de ambiente recomendadas para Python em containers
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app/src
+
+# Defina o diretório de trabalho dentro do container
+WORKDIR /app
+
+# ---- Estágio de Dependências ----
+# Instale dependências do sistema (se necessário) - Geralmente não é preciso para essas libs Python
+# RUN apt-get update && apt-get install -y --no-install-recommends some-package && rm -rf /var/lib/apt/lists/*
+
+# Atualize o pip
+RUN pip install --no-cache-dir --upgrade pip
+
+# Copie apenas o arquivo de definição de dependências primeiro para aproveitar o cache do Docker
+COPY pyproject.toml ./
+# Opcional: Copie outros arquivos necessários para o build (ex: README.md se referenciado, hatch.toml)
+COPY README.md ./
+
+# Instale as dependências do projeto (e o próprio projeto em modo não-editável)
+# O comando `pip install .` lê o pyproject.toml e instala tudo que está definido lá
+RUN pip install --no-cache-dir .
+
+# ---- Estágio Final ----
+# Copie o código fonte da aplicação
+# Assumindo que o código está em 'src' baseado no pyproject.toml [tool.hatch.build.targets.wheel]
+COPY ./src ./src
+
+# Crie um usuário não-privilegiado e um grupo
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+
+# Garanta que o diretório da aplicação pertença ao novo usuário
+# Isso é importante se você precisar escrever arquivos em tempo de execução (logs, uploads, etc.)
+# Se sua aplicação for read-only, pode não ser estritamente necessário, mas é uma boa prática.
+RUN chown -R appuser:appgroup /app
+
+# Mude para o usuário não-privilegiado
+USER appuser
+
+# Exponha a porta que sua aplicação usa (Ajuste 8000 se necessário)
+# O framework MCP ou seu código específico determinará a porta correta.
+# 8000 é um padrão comum para APIs web.
+EXPOSE 8000
+
+# Defina o comando para rodar a aplicação
+# Isso usa o script definido em pyproject.toml [project.scripts]
+CMD ["python", "-m", "acertpix_api_lite"]

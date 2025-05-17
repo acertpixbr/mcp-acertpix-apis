@@ -17,12 +17,12 @@ import mcp.server.stdio
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", ".env"))
 
 # Configurações da API
-API_BASE_URL = os.getenv("ACERTPIX_API_URL", "https://testapi.plataformaacertpix.com.br")
+API_BASE_URL = os.getenv("ACERTPIX_API_URL", "https://devapi.plataformaacertpix.com.br")
 CLIENT_ID = os.getenv("ACERTPIX_CLIENT_ID", "acertpix-api")
 CLIENT_SECRET = os.getenv("ACERTPIX_CLIENT_SECRET", "acertpix-api")
 SSL_VERIFY = os.getenv("ACERTPIX_API_SSL_VERIFY", "true").lower() != "true"
 
-print(f"INFO:     Iniciando API Score Acertpix Score")
+print(f"INFO:     Iniciando API Analise PRO Acertpix")
 print(f"INFO:     API Base URL: {API_BASE_URL}")
 print(f"INFO:     Client ID: {CLIENT_ID}")
 print(f"INFO:     Client Secret: {CLIENT_SECRET}")
@@ -36,7 +36,7 @@ server = Server("acertpix-api-analise")
 @server.list_tools()
 async def handle_list_tools() -> list[types.Tool]:
     """
-    Lista as ferramentas disponíveis para interação com a API Score.
+    Lista as ferramentas disponíveis para interação com a API.
     """
     return [
         types.Tool(
@@ -123,7 +123,7 @@ async def consultar_analise(chave: str) -> Dict[str, Any]:
         
         print(f"INFO:     Consultando analise em: {url}")
 
-        # 3. Fazer a chamada GET para a API de Score
+        # 3. Fazer a chamada GET para a API 
         async with httpx.AsyncClient(verify=SSL_VERIFY) as client:
             response = await client.get(url, headers=headers, params=params)
             print(f"INFO:     Resposta Analise Status: {response.status_code}")
@@ -160,7 +160,7 @@ async def obter_laudo_analise(id: int) -> Dict[str, Any]:
         
         print(f"INFO:     Obtendo laudo da analise em: {url}")
 
-        # 3. Fazer a chamada GET para a API de Score
+        # 3. Fazer a chamada GET para a API 
         async with httpx.AsyncClient(verify=SSL_VERIFY) as client:
             response = await client.get(url, headers=headers, params=params)
             print(f"INFO:     Resposta ObterLaudo Status: {response.status_code}")
@@ -211,7 +211,7 @@ async def handle_call_tool(
                 return [
                     types.TextContent(
                     type="text",
-                    text=f"Erro ao consultar score: {str(e)}\nURL: {API_BASE_URL}"
+                    text=f"Erro ao consultar analise: {str(e)}\nURL: {API_BASE_URL}"
                 )
             ]
                 

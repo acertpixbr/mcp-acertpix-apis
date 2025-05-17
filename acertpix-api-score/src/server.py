@@ -17,7 +17,7 @@ import mcp.server.stdio
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", ".env"))
 
 # Configurações da API
-API_BASE_URL = os.getenv("ACERTPIX_API_URL", "https://testapi.plataformaacertpix.com.br")
+API_BASE_URL = os.getenv("ACERTPIX_API_URL", "https://devapi.plataformaacertpix.com.br")
 CLIENT_ID = os.getenv("ACERTPIX_CLIENT_ID", "acertpix-api")
 CLIENT_SECRET = os.getenv("ACERTPIX_CLIENT_SECRET", "acertpix-api")
 SSL_VERIFY = os.getenv("ACERTPIX_API_SSL_VERIFY", "true").lower() != "true"
@@ -29,9 +29,9 @@ print(f"INFO:     Client Secret: {CLIENT_SECRET}")
 print(f"INFO:     SSL Verify: {SSL_VERIFY}")
 
 TOKEN_ENDPOINT = "/OAuth2/Token"
-LITE_ENDPOINT = "/Lite"
+SCORE_ENDPOINT = "/Score/Consultar"
 
-server = Server("acertpix-api-lite")
+server = Server("acertpix-api-score")
 
 @server.list_tools()
 async def handle_list_tools() -> list[types.Tool]:
@@ -40,8 +40,8 @@ async def handle_list_tools() -> list[types.Tool]:
     """
     return [
         types.Tool(
-            name="consultar-lite",
-            description="Consultar a analise do produto lite com uma chave na API da Acertpix",
+            name="consultar-score",
+            description="Consulta o score de uma chave na API da Acertpix",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -50,9 +50,20 @@ async def handle_list_tools() -> list[types.Tool]:
                 "required": ["chave"]
             },
         ),
+         types.Tool(
+            name="obter-laudo-score",
+            description="Consultar o Laudo Score de um Id na API da Acertpix",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "id": {"type": "integer"},
+                },
+                "required": ["id"]
+            },
+        )
+
     ]
-    
-      
+
 async def _internal_get_access_token(client_id: str, client_secret: str) -> str:
     """
     Lógica interna para obter o token de acesso da API.
@@ -93,15 +104,20 @@ async def _internal_get_access_token(client_id: str, client_secret: str) -> str:
         except (json.JSONDecodeError, ValueError, KeyError) as e:
             print(f"ERRO:     Erro ao processar resposta do token: {e}")
             raise Exception(f"Erro ao processar resposta da API de Token: {e}") from e
-   
-    
-async def consultar_lite(chave: str) -> Dict[str, Any]:
+
+
+async def consultar_score(chave: str) -> Dict[str, Any]:
+    """
+    Consulta o score de uma chave na API.
+    """
     try:
+        # access_token = await get_access_token(client_id, client_secret)
+        # 1. Obter o token de acesso usando a lógica interna
         access_token = await _internal_get_access_token(CLIENT_ID, CLIENT_SECRET)
         print(f"\nToken gerado: {access_token}\n")
         
-        url = f"{API_BASE_URL}{LITE_ENDPOINT}/Consultar?chave={chave}"
-
+        url = f"{API_BASE_URL}{SCORE_ENDPOINT}?chave={chave}"
+        
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
@@ -109,27 +125,64 @@ async def consultar_lite(chave: str) -> Dict[str, Any]:
         }
         params = {"chave": chave} # Parâmetros GET vão em 'params' com httpx
         
-        print(f"INFO:     Consultando lite em: {url}")
+        print(f"INFO:     Consultando score em: {url}")
 
-        # 3. Fazer a chamada GET para a API
+        # 3. Fazer a chamada GET para a API de Score
         async with httpx.AsyncClient(verify=SSL_VERIFY) as client:
             response = await client.get(url, headers=headers, params=params)
-            print(f"INFO:     Resposta Lite Status: {response.status_code}")
+            print(f"INFO:     Resposta Score Status: {response.status_code}")
             response.raise_for_status() # Levanta exceção para status >= 400
-            lite_data = response.json()
+            score_data = response.json()
         
-        print(f"Lite response status: {response.status_code}")
-        print(f"Lite response text: {response.text}")
+        print(f"Score response status: {response.status_code}")
+        print(f"Score response text: {response.text}")
         
         return {
             "status": "sucesso",
-            "resultado": lite_data
+            "resultado": score_data
+        }
+
+    
+    except Exception as e:
+        print(f"ERRO:     Falha na ferramenta 'consultar-score': {e}")
+        return {"status": "erro", "mensagem": f"Erro ao consultar score: {str(e)}"}
+
+
+async def obter_laudo_score(id: int) -> Dict[str, Any]:
+    try:
+        access_token = await _internal_get_access_token(CLIENT_ID, CLIENT_SECRET)
+        print(f"\nToken gerado: {access_token}\n")
+        
+        url = f"{API_BASE_URL}/Score/ObterLaudo/{id}"
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Bearer {access_token}",
+        }
+        params = {"id": id} # Parâmetros GET vão em 'params' com httpx
+        
+        print(f"INFO:     Obtendo laudo score em: {url}")
+
+        # 3. Fazer a chamada GET para a API de Score
+        async with httpx.AsyncClient(verify=SSL_VERIFY) as client:
+            response = await client.get(url, headers=headers, params=params)
+            print(f"INFO:     Resposta ObterLaudo score Status: {response.status_code}")
+            response.raise_for_status() # Levanta exceção para status >= 400
+            obter_laudo_score_data = response.json()
+        
+        print(f"ObterLaudo score response status: {response.status_code}")
+        print(f"ObterLaudo score response text: {response.text}")
+        
+        return {
+            "status": "sucesso",
+            "resultado": obter_laudo_score_data
         }
 
 
     except Exception as e:
-        print(f"ERRO:     Falha na ferramenta 'consultar-lite': {e}")
-        return {"status": "erro", "mensagem": f"Erro ao consultar lite: {str(e)}"}
+        print(f"ERRO:     Falha na ferramenta 'obter-laudo-scoree': {e}")
+        return {"status": "erro", "mensagem": f"Erro ao obter laudo score: {str(e)}"}
 
     
 @server.call_tool()
@@ -142,31 +195,63 @@ async def handle_call_tool(
     if not arguments:
         raise ValueError("Argumentos ausentes")
 
-    match name:            
-        case "consultar-lite":
-            
-            chave = arguments.get("chave")
+    match name:
+        case "consultar-score":
+            chave = arguments.get("chave") 
             if not all([chave]):
                 raise ValueError("Chave é obrigatória")
-            
+           
             try:
-                resultado = await consultar_lite(chave)
+                resultado = await consultar_score(chave)
+                
                 return [
-                    types.TextContent(
+                types.TextContent(
                     type="text",
-                    text=f"Resultado da consulta de analise lite para chave {chave}:\n{resultado}"
-                )    
-               ]
+                    text=f"Resultado da consulta de score para chave {chave}:\n{resultado}"
+                )
+             ]
                 
             except Exception as e:
                 return [
                     types.TextContent(
                     type="text",
-                    text=f"Erro ao consultar analise lite: {str(e)}\nURL: {API_BASE_URL}"
+                    text=f"Erro ao consultar score: {str(e)}\nURL: {API_BASE_URL}"
                 )
-            ]
+                    ]
+       
+        case "obter-laudo-score":
+             id = arguments.get("id")
+             
+             if not all([id]):
+                raise ValueError("Id é obrigatório")
+            
+             try:
+                resultado = await obter_laudo_score(id)
+                
+                return [
+                    types.TextContent(
+                    type="text",
+                    text=f"Resultado da consulta de obter laudo score para id {id}:\n{resultado}"
+                )   
+                 
+               ]
+                
+             except Exception as e:
+                 return [
+                    types.TextContent(
+                    type="text",
+                    text=f"Erro ao obter laudo score: {str(e)}\nURL: {API_BASE_URL}"
+                )
+                
+            ]     
+           
+            
+               
+                      
+        case _:
+            raise ValueError(f"Ferramenta desconhecida: {name}")
         
-        
+
 async def main():
     """
     Inicia o servidor MCP.
@@ -176,7 +261,7 @@ async def main():
             read_stream,
             write_stream,
             InitializationOptions(
-                server_name="acertpix-api-lite",
+                server_name="acertpix-api-score",
                 server_version="0.1.0",
                 capabilities=server.get_capabilities(
                     notification_options=NotificationOptions(),

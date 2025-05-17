@@ -1,6 +1,6 @@
-# Acertpix API Score MCP Server
+# Acertpix API Facematch (Biometria) MCP Server
 
-Servidor MCP para integração com a API SCORE da Acertpix.
+Servidor MCP para integração com a API Facematch (Biometria) da Acertpix.
 
 ## Tabela de Conteúdo
 
@@ -15,7 +15,7 @@ Servidor MCP para integração com a API SCORE da Acertpix.
 
 ## Funcionalidades
 
--   **Consulta de score por chave:** Permite consultar o score da analise no documento de uma pessoa física.
+-   **Consulta de facematch por chave:** Permite consultar o facematch das fotos de uma pessoa física.
 
 ## Requisitos
 
@@ -28,7 +28,7 @@ Servidor MCP para integração com a API SCORE da Acertpix.
 
     ```bash
     git clone <repository_url>
-    cd acertpix-api-score
+    cd acertpix-api-facematch
     ```
 
 2.  Instale os pacotes:
@@ -40,7 +40,7 @@ Servidor MCP para integração com a API SCORE da Acertpix.
 3. Para usar Docker, build a imagem
 
     ```bash
-    docker build -t acertpix-api-score .
+    docker build -t acertpix-api-facematch .
     ```
 
 4. Precisa informar as variáveis de ambiente:
@@ -63,7 +63,7 @@ Arquivo de configuração mcp.json, configuração para acesso por docker ou dir
 ```json
 {
     "servers": {
-        "acertpix-api-score-docker": {
+        "acertpix-api-facematch-docker": {
             "type": "stdio",
             "command": "docker",
             "args": ["run", "-i", 
@@ -73,13 +73,13 @@ Arquivo de configuração mcp.json, configuração para acesso por docker ou dir
             "-e","ACERTPIX_CLIENT_SECRET=yyyyyyy",
             "-e","ACERTPIX_API_SSL_VERIFY=false",
             "--rm", 
-            "-p", "8000:8000", "acertpix-api-score"]
+            "-p", "8000:8000", "acertpix-api-facematch"]
         },
-        "acertpix-api-score-src": {
+        "acertpix-api-facematch-src": {
             "command": "python",
             "args": [
                 "-m",
-                "acertpix_api_score"
+                "acertpix_api_facematch"
             ]
         },        
     }
@@ -90,7 +90,7 @@ Arquivo de configuração mcp.json, configuração para acesso por docker ou dir
 
 ```python
 # Exemplo de chamada à ferramenta (para referência)
-resultado = await server.call_tool("consultar-score", {
+resultado = await server.call_tool("consultar-facematch", {
     "chave": "12345678900"
 })
 ```
