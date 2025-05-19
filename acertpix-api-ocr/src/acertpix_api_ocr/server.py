@@ -50,6 +50,21 @@ async def handle_list_tools() -> list[types.Tool]:
                 "required": ["chave"]
             },
         ),
+        types.Tool(
+            name="enviar-documento-ocr",
+            description="Enviar um documento para ser gerado um OCR desse documento, os documentos enviados serão convertidos no seu ambiente para base64 e enviados para a função da tool",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "chave": {"type": "string"},
+                    "cpf": {"type": "string"},
+                    "imagemFrente": {"type": "string"},
+                    "imagemVerso": {"type": "string"},
+                    # Adicionar campos do WebHook
+                },
+                "required": ["chave", "imagemFrente"]
+            },
+        ),
     ]
     
       
@@ -131,6 +146,50 @@ async def consultar_ocr(chave: str) -> Dict[str, Any]:
         print(f"ERRO:     Falha na ferramenta 'consultar-ocr': {e}")
         return {"status": "erro", "mensagem": f"Erro ao consultar OCR: {str(e)}"}
 
+
+async def enviar_documento_ocr(chave: str, cpf: str, imagemFrente: str, imagemVerso: str) -> Dict[str, Any]:
+    try:
+        access_token = await _internal_get_access_token(CLIENT_ID, CLIENT_SECRET)
+        print(f"\nToken gerado: {access_token}\n")
+    
+        url = f"{API_BASE_URL}{OCR_ENDPOINT}/Enviar"
+    
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Bearer {access_token}",
+        }
+        # params = {"chave": chave} # Parâmetros GET vão em 'params' com httpx
+            
+        content = {
+            "chave": chave,
+            "cpf": cpf,
+            "imagemFrente": imagemFrente,
+            "imagemVerso": imagemVerso
+        }
+        
+        print(f"INFO:     enviando documento para ocr em: {url}")
+
+        # 3. Fazer a chamada GET para a API
+        async with httpx.AsyncClient(verify=SSL_VERIFY) as client:
+            response = await client.post(url, headers=headers, json=content)
+            print(f"INFO:     Resposta ocr Status: {response.status_code}")
+            response.raise_for_status() # Levanta exceção para status >= 400
+            ocr_data = response.json()
+        
+        print(f"ocr response status: {response.status_code}")
+        print(f"ocr response text: {response.text}")
+        
+        return {
+        "status": "sucesso",
+        "resultado": ocr_data
+        }
+    
+    except Exception as e:
+        print(f"ERRO:     Falha na ferramenta 'consultar-ocr': {e}")
+        return {"status": "erro", "mensagem": f"Erro ao consultar OCR: {str(e)}"}
+
+               
     
 @server.call_tool()
 async def handle_call_tool(
@@ -166,7 +225,36 @@ async def handle_call_tool(
                 )
             ]
         
-        
+        case "enviar-documento-ocr":
+            chave = arguments.get("chave")
+            cpf = arguments.get("cpf")
+            imagemFrente = arguments.get("imagemFrente")
+            imagemVerso = arguments.get("imagemVerso")
+            
+            if not all([chave]):
+                raise ValueError("Chave é obrigatória")
+            
+            if not all([imagemFrente]):
+                raise ValueError("ImagemFrente é obrigatória")
+            
+            try:
+                resultado = await enviar_documento_ocr(chave, cpf, imagemFrente, imagemVerso)
+                return [
+                    types.TextContent(
+                        type="text",
+                        text=f"Resultado do envio do documento OCR : {resultado}"
+                    ) 
+                ]
+                
+            except Exception as e:
+                return [
+                    types.TextContent(
+                        type="text",
+                        text=f"Erro ao enviar documento ocr {str(e)}\nURL: {API_BASE_URL}"
+                    )
+                ]
+            
+     
 async def main():
     """
     Inicia o servidor MCP.
