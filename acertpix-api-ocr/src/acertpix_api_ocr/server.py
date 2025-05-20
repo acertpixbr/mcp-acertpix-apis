@@ -13,6 +13,8 @@ import mcp.types as types
 from mcp.server import NotificationOptions, Server
 import mcp.server.stdio
 
+import base64
+
 # Carrega variáveis de ambiente de um arquivo .env (opcional)
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", ".env"))
 
@@ -58,11 +60,11 @@ async def handle_list_tools() -> list[types.Tool]:
                 "properties": {
                     "chave": {"type": "string"},
                     "cpf": {"type": "string"},
-                    "imagemFrente": {"type": "string"},
-                    "imagemVerso": {"type": "string"},
+                    "caminhoImagemFrente": {"type": "string"},
+                    "caminhoImagemVerso": {"type": "string"},
                     # Adicionar campos do WebHook
                 },
-                "required": ["chave", "imagemFrente"]
+                "required": ["chave", "caminhoImagemFrente"]
             },
         ),
     ]
@@ -189,7 +191,14 @@ async def enviar_documento_ocr(chave: str, cpf: str, imagemFrente: str, imagemVe
         print(f"ERRO:     Falha na ferramenta 'consultar-ocr': {e}")
         return {"status": "erro", "mensagem": f"Erro ao consultar OCR: {str(e)}"}
 
-               
+def converter_para_base64(caminhoImagem: str) -> str:
+    try:
+        with open(caminhoImagem, "rb") as imagem:
+            imagem_bytes = imagem.read()
+            imagem_base64 = base64.b64encode(imagem_bytes).decode("utf-8")
+            return imagem_base64
+    except Exception as e:
+        print(f"Erro ao converter imagem: {e}")             
     
 @server.call_tool()
 async def handle_call_tool(
@@ -228,17 +237,25 @@ async def handle_call_tool(
         case "enviar-documento-ocr":
             chave = arguments.get("chave")
             cpf = arguments.get("cpf")
-            imagemFrente = arguments.get("imagemFrente")
-            imagemVerso = arguments.get("imagemVerso")
+            caminhoImagemFrente = arguments.get("caminhoImagemFrente")
+            caminhoImagemVerso = arguments.get("caminhoImagemVerso")
             
             if not all([chave]):
                 raise ValueError("Chave é obrigatória")
             
-            if not all([imagemFrente]):
+            if not all([caminhoImagemFrente]):
                 raise ValueError("ImagemFrente é obrigatória")
             
+            base64ImagemFrente = ""
+            if(caminhoImagemFrente):
+                base64ImagemFrente = converter_para_base64(caminhoImagemFrente)
+
+            base64ImagemVerso = ""
+            if(caminhoImagemVerso):
+                base64ImagemVerso = converter_para_base64(caminhoImagemVerso)
+
             try:
-                resultado = await enviar_documento_ocr(chave, cpf, imagemFrente, imagemVerso)
+                resultado = await enviar_documento_ocr(chave, cpf, base64ImagemFrente, base64ImagemVerso)
                 return [
                     types.TextContent(
                         type="text",
