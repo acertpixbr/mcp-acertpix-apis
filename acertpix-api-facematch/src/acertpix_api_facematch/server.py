@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field, AnyUrl
@@ -48,6 +49,21 @@ async def handle_list_tools() -> list[types.Tool]:
                     "id": {"type": "integer"},
                 },
                 "required": ["id"]
+            },
+        ),
+        types.Tool(
+            name="enviar-facematch",
+            description="Envia documentos para facematch na API da Acertpix",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "chave": {"type": "string"},
+                    "cpf": {"type": "string"},
+                    "caminhoImagemFrente": {"type": "string"},
+                    "caminhoImagemVerso": {"type": "string"},
+                    "caminhoImagemSelfie": {"type": "string"},
+                },
+                "required": ["chave", "caminhoImagemFrente", "caminhoImagemSelfie"]
             },
         ),
         types.Tool(
@@ -144,6 +160,59 @@ async def consultar_facematch(id: int) -> Dict[str, Any]:
         return {"status": "erro", "mensagem": f"Erro ao consultar facematch: {str(e)}"}
 
 
+async def enviar_facematch(chave: str, cpf: str, imagemFrente: str, imagemVerso: str, imagemSelfie: str) -> Dict[str, Any]:
+    try:
+        access_token = await _internal_get_access_token(CLIENT_ID, CLIENT_SECRET)
+        print(f"\nToken gerado: {access_token}\n")
+    
+        url = f"{API_BASE_URL}{BIOMETRIA_ENVIAR_ENDPOINT}"
+    
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Bearer {access_token}",
+        }
+        # params = {"chave": chave} # Parâmetros GET vão em 'params' com httpx
+            
+        content = {
+            "chave": chave,
+            "cpf": cpf,
+            "imagemFrente": imagemFrente,
+            "imagemVerso": imagemVerso,
+            "imagemSelfie": imagemSelfie
+        }
+        
+        print(f"INFO:     enviando documento para facematch em: {url}")
+
+        # 3. Fazer a chamada GET para a API
+        async with httpx.AsyncClient(verify=SSL_VERIFY) as client:
+            response = await client.post(url, headers=headers, json=content)
+            print(f"INFO:     Resposta ocr Status: {response.status_code}")
+            response.raise_for_status() # Levanta exceção para status >= 400
+            facematch_data = response.json()
+        
+        print(f"facematch response status: {response.status_code}")
+        print(f"facematch response text: {response.text}")
+        
+        return {
+        "status": "sucesso",
+        "resultado": facematch_data
+        }
+    
+    except Exception as e:
+        print(f"ERRO:     Falha na ferramenta 'enviar-facematch': {e}")
+        return {"status": "erro", "mensagem": f"Erro ao enviar facematch: {str(e)}"}
+
+def converter_para_base64(caminhoImagem: str) -> str:
+    try:
+        with open(caminhoImagem, "rb") as imagem:
+            imagem_bytes = imagem.read()
+            imagem_base64 = base64.b64encode(imagem_bytes).decode("utf-8")
+            return imagem_base64
+    except Exception as e:
+        print(f"Erro ao converter imagem: {e}")  
+
+
 async def obter_pdf_facematch(id: int, caminho_salvar: str) -> Dict[str, Any]:
     """
     Obtem pdf do facematch por ID na API.
@@ -197,55 +266,101 @@ async def handle_call_tool(
     if not arguments:
         raise ValueError("Argumentos ausentes")
 
-    if name == "consultar-facematch":
-        id_biometria = arguments.get("id")
+    match name: 
+        case "consultar-facematch":
+            id_biometria = arguments.get("id")
 
-        if id_biometria is None:
-            raise ValueError("ID é obrigatório")
+            if id_biometria is None:
+                raise ValueError("ID é obrigatório")
 
-        try:
-            resultado = await consultar_facematch(id_biometria)
-            return [
-                types.TextContent(
-                    type="text",
-                    text=f"Resultado da consulta de facematch para ID {id_biometria}:\n{json.dumps(resultado, indent=2, ensure_ascii=False)}"
-                )
-            ]
-        except Exception as e:
-            return [
-                types.TextContent(
-                    type="text",
-                    text=f"Erro ao consultar facematch: {str(e)}"
-                )
-            ]
+            try:
+                resultado = await consultar_facematch(id_biometria)
+                return [
+                    types.TextContent(
+                        type="text",
+                        text=f"Resultado da consulta de facematch para ID {id_biometria}:\n{json.dumps(resultado, indent=2, ensure_ascii=False)}"
+                    )
+                ]
+            except Exception as e:
+                return [
+                    types.TextContent(
+                        type="text",
+                        text=f"Erro ao consultar facematch: {str(e)}"
+                    )
+                ]
+
+        case "enviar-facematch":
+                chave = arguments.get("chave")
+                cpf = arguments.get("cpf", "")
+                caminhoImagemFrente = arguments.get("caminhoImagemFrente")
+                caminhoImagemVerso = arguments.get("caminhoImagemVerso", "")
+                caminhoImagemSelfie = arguments.get("caminhoImagemSelfie")
+                
+                if not all([chave]):
+                    raise ValueError("Chave é obrigatória")
+                
+                if not all([caminhoImagemFrente]):
+                    raise ValueError("ImagemFrente é obrigatória")
+                
+                if not all([caminhoImagemSelfie]):
+                    raise ValueError("ImagemSelfie é obrigatória")
+                
+                base64ImagemFrente = ""
+                if(caminhoImagemFrente):
+                    base64ImagemFrente = converter_para_base64(caminhoImagemFrente)
+
+                base64ImagemVerso = ""
+                if(caminhoImagemVerso):
+                    base64ImagemVerso = converter_para_base64(caminhoImagemVerso)
+
+                base64ImagemSelfie = ""
+                if(caminhoImagemSelfie):
+                    base64ImagemSelfie = converter_para_base64(caminhoImagemSelfie)
+
+                try:
+                    resultado = await enviar_facematch(chave, cpf, base64ImagemFrente, base64ImagemVerso, base64ImagemSelfie)
+                    return [
+                        types.TextContent(
+                            type="text",
+                            text=f"Resultado do envio do facematch : {resultado}"
+                        ) 
+                    ]
+                    
+                except Exception as e:
+                    return [
+                        types.TextContent(
+                            type="text",
+                            text=f"Erro ao enviar facematch {str(e)}\nURL: {API_BASE_URL}"
+                        )
+                    ]
+
+        case "obter-pdf-facematch":
             
-    if name == "obter-pdf-facematch":
-        
-        id_biometria = arguments.get("id")
-        
-        caminho_salvar = arguments.get("caminho_salvar")
-
-        if id_biometria is None:
-            raise ValueError("ID é obrigatório")
-        
-        if caminho_salvar is None:
-            raise ValueError("CaminhoSalvar é obrigatório")
+            id_biometria = arguments.get("id")
             
-        try:
-            resultado = await obter_pdf_facematch(id_biometria, caminho_salvar)
-            return [
-                types.TextContent(
-                    type="text",
-                    text=f"Resultado do obter pdf de facematch para ID {id_biometria}:\n{json.dumps(resultado, indent=2, ensure_ascii=False)}"
-                )
-            ]
-        except Exception as e:
-            return [
-                types.TextContent(
-                    type="text",
-                    text=f"Erro ao obter pdf do facematch: {str(e)}"
-                )
-            ]
+            caminho_salvar = arguments.get("caminho_salvar")
+
+            if id_biometria is None:
+                raise ValueError("ID é obrigatório")
+            
+            if caminho_salvar is None:
+                raise ValueError("CaminhoSalvar é obrigatório")
+                
+            try:
+                resultado = await obter_pdf_facematch(id_biometria, caminho_salvar)
+                return [
+                    types.TextContent(
+                        type="text",
+                        text=f"Resultado do obter pdf de facematch para ID {id_biometria}:\n{json.dumps(resultado, indent=2, ensure_ascii=False)}"
+                    )
+                ]
+            except Exception as e:
+                return [
+                    types.TextContent(
+                        type="text",
+                        text=f"Erro ao obter pdf do facematch: {str(e)}"
+                    )
+                ]
         
     
     raise ValueError(f"Ferramenta desconhecida: {name}")
