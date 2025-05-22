@@ -49,6 +49,18 @@ async def handle_list_tools() -> list[types.Tool]:
                 },
                 "required": ["id"]
             },
+        ),
+        types.Tool(
+            name="obter-pdf-facematch",
+            description="Buscar/Consultar/Obter o pdf do facematch de um ID na API da AcertPix",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "id": {"type": "integer"},
+                    "caminho_salvar": {"type": "string"},
+                },
+                "required": ["id", "caminho_salvar"]
+            },
         )
     ]
 
@@ -132,6 +144,48 @@ async def consultar_facematch(id: int) -> Dict[str, Any]:
         return {"status": "erro", "mensagem": f"Erro ao consultar facematch: {str(e)}"}
 
 
+async def obter_pdf_facematch(id: int, caminho_salvar: str) -> Dict[str, Any]:
+    """
+    Obtem pdf do facematch por ID na API.
+    """
+    try:
+        # 1. Obter o token de acesso usando a lógica interna
+        access_token = await _internal_get_access_token(CLIENT_ID, CLIENT_SECRET)
+        print(f"Token gerado: {access_token[:10]}...")
+        
+        url = f"{API_BASE_URL}/Biometria/ObterPdf/{id}"
+        print(url)
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Bearer {access_token}",
+        }
+        
+        print(f"INFO:     Obtendo pdf do facematch em: {url}")
+        
+        caminho_salvar_completo = os.path.join(caminho_salvar, f"facematch_pdf_{id}.pdf")
+
+        # 2. Fazer a chamada GET para a API de Facematch
+        async with httpx.AsyncClient(verify=SSL_VERIFY) as client:
+            response = await client.get(url, headers=headers)
+            print(f"INFO:     Resposta Facematch Status: {response.status_code}")
+            response.raise_for_status()
+            
+            with open(caminho_salvar_completo, "wb") as file:
+                file.write(response.content)
+                
+        
+        print(f"Facematch response status: {response.status_code}")
+        
+        return {
+            "status": "sucesso",
+            "resultado": f"Pdf Facematch salvo em: {caminho_salvar_completo}"
+        }
+    
+    except Exception as e:
+        print(f"ERRO:     Falha na ferramenta 'obter-pdf-facematch': {e}")
+        return {"status": "erro", "mensagem": f"Erro ao consultar facematch: {str(e)}"}
+    
 
 @server.call_tool()
 async def handle_call_tool(
@@ -164,8 +218,37 @@ async def handle_call_tool(
                     text=f"Erro ao consultar facematch: {str(e)}"
                 )
             ]
-    else:
-        raise ValueError(f"Ferramenta desconhecida: {name}")
+            
+    if name == "obter-pdf-facematch":
+        
+        id_biometria = arguments.get("id")
+        
+        caminho_salvar = arguments.get("caminho_salvar")
+
+        if id_biometria is None:
+            raise ValueError("ID é obrigatório")
+        
+        if caminho_salvar is None:
+            raise ValueError("CaminhoSalvar é obrigatório")
+            
+        try:
+            resultado = await obter_pdf_facematch(id_biometria, caminho_salvar)
+            return [
+                types.TextContent(
+                    type="text",
+                    text=f"Resultado do obter pdf de facematch para ID {id_biometria}:\n{json.dumps(resultado, indent=2, ensure_ascii=False)}"
+                )
+            ]
+        except Exception as e:
+            return [
+                types.TextContent(
+                    type="text",
+                    text=f"Erro ao obter pdf do facematch: {str(e)}"
+                )
+            ]
+        
+    
+    raise ValueError(f"Ferramenta desconhecida: {name}")
 
 async def main():
     """
