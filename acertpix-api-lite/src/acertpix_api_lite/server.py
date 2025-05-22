@@ -116,7 +116,7 @@ async def _internal_get_access_token(client_id: str, client_secret: str) -> str:
     }
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
 
-    print(f"INFO:     Tentando obter token de: {url}")
+    print(f"INFO:     Tentando obter token de: {url}") 
 
     async with httpx.AsyncClient(verify=SSL_VERIFY) as client:
         try:
