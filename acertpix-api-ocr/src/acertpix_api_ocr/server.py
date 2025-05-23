@@ -54,7 +54,7 @@ async def handle_list_tools() -> list[types.Tool]:
         ),
         types.Tool(
             name="enviar-documento-ocr",
-            description="Enviar um documento para ser gerado um OCR desse documento, os documentos enviados serão convertidos no seu ambiente para base64 e enviados para a função da tool",
+            description="Enviar um documento para ser gerado um OCR desse documento",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -246,9 +246,8 @@ async def handle_call_tool(
             if not all([caminhoImagemFrente]):
                 raise ValueError("ImagemFrente é obrigatória")
             
-            base64ImagemFrente = ""
-            if(caminhoImagemFrente):
-                base64ImagemFrente = converter_para_base64(caminhoImagemFrente)
+            
+            base64ImagemFrente = converter_para_base64(caminhoImagemFrente)
 
             base64ImagemVerso = ""
             if(caminhoImagemVerso):

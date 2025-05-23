@@ -78,50 +78,11 @@ async def handle_list_tools() -> list[types.Tool]:
                     "ImagemSelfie": {"type": "string"},
                     "ImagemQrCode": {"type": "string"},
                     "CPF": {"type": "string"},
-                    "NumeroDocumentoInformado": {"type": "string"},
-                    "NomeInformado": {"type": "string"},
-                    "NomeMaeInformado": {"type": "string"},
-                    "DataNascimentoInformada": {"type": "string"},
-                    "Email": {"type": "string"},
-                    "TelefoneCelular": {"type": "string"},
-                    "EnderecoCep": {"type": "string"},
-                    "EnderecoLogradouro": {"type": "string"},
-                    "EnderecoNumero": {"type": "string"},
-                    "EnderecoComplemento": {"type": "string"},
-                    "EnderecoBairro": {"type": "string"},
-                    "EnderecoCidade": {"type": "string"},
-                    "EnderecoUf": {"type": "string"},
-                    "Renda": {"type": "number"},
-                    "Produto": {"type": "string"},
-                    "Ticket": {"type": "number"},
-                    "ScoreBiometria": {"type": "number"},
-                    "IP": {"type": "string"},
-                    "RequerMesa": {"type": "string"},
-                    "MensagemParaAnalista": {"type": "string"},
                     # Adicionar webhook caso seja necessario!
                 },
                 "required": [
                     "Chave",
                     "ImagemFrente",
-                    "ImagemSelfie",
-                    "CPF",
-                    "NumeroDocumentoInformado",
-                    "NomeInformado",
-                    "NomeMaeInformado",
-                    "DataNascimentoInformada",
-                    "Email",
-                    "TelefoneCelular",
-                    "EnderecoCep",
-                    "EnderecoLogradouro",
-                    "EnderecoNumero",
-                    "EnderecoComplemento",
-                    "EnderecoBairro",
-                    "EnderecoCidade",
-                    "EnderecoUf",
-                    "Renda",
-                    "Produto",
-                    "Ticket",
-                    "ScoreBiometria",
                 ],
             },
         ),
@@ -254,26 +215,6 @@ async def enviar_analise(
     ImagemSelfie: str,
     ImagemQrCode: str,
     CPF: str,
-    NumeroDocumentoInformado: str,
-    NomeInformado: str,
-    NomeMaeInformado: str,
-    DataNascimentoInformada: str,
-    Email: str,
-    TelefoneCelular: str,
-    EnderecoCep: str,
-    EnderecoLogradouro: str,
-    EnderecoNumero: str,
-    EnderecoComplemento: str,
-    EnderecoBairro: str,
-    EnderecoCidade: str,
-    EnderecoUf: str,
-    Renda: float,
-    Produto: str,
-    Ticket: float,
-    ScoreBiometria: float,
-    IP: str,
-    RequerMesa: str,
-    MensagemParaAnalista: str,
 ) -> Dict[str, Any]:
     try:
         access_token = await _internal_get_access_token(CLIENT_ID, CLIENT_SECRET)
@@ -295,26 +236,6 @@ async def enviar_analise(
             "ImagemSelfie": ImagemSelfie,
             "ImagemQrCode": ImagemQrCode,
             "CPF": CPF,
-            "NumeroDocumentoInformado": NumeroDocumentoInformado,
-            "NomeInformado": NomeInformado,
-            "NomeMaeInformado": NomeMaeInformado,
-            "DataNascimentoInformada": DataNascimentoInformada,
-            "Email": Email,
-            "TelefoneCelular": TelefoneCelular,
-            "EnderecoCep": EnderecoCep,
-            "EnderecoLogradouro": EnderecoLogradouro,
-            "EnderecoNumero": EnderecoNumero,
-            "EnderecoComplemento": EnderecoComplemento,
-            "EnderecoBairro": EnderecoBairro,
-            "EnderecoCidade": EnderecoCidade,
-            "EnderecoUf": EnderecoUf,
-            "Renda": Renda,
-            "Produto": Produto,
-            "Ticket": Ticket,
-            "ScoreBiometria": ScoreBiometria,
-            "IP": IP,
-            "RequerMesa": RequerMesa,
-            "MensagemParaAnalista": MensagemParaAnalista,
         }
 
         print(f"INFO:     enviando documento para analise em: {url}")
@@ -408,25 +329,6 @@ async def handle_call_tool(
             campos_obrigatorios = [
                 "Chave",
                 "ImagemFrente",
-                "ImagemSelfie",
-                "CPF",
-                "NumeroDocumentoInformado",
-                "NomeInformado",
-                "NomeMaeInformado",
-                "DataNascimentoInformada",
-                "Email",
-                "TelefoneCelular",
-                "EnderecoCep",
-                "EnderecoLogradouro",
-                "EnderecoNumero",
-                "EnderecoComplemento",
-                "EnderecoBairro",
-                "EnderecoCidade",
-                "EnderecoUf",
-                "Renda",
-                "Produto",
-                "Ticket",
-                "ScoreBiometria",
             ]
             
             valores = {}
@@ -440,29 +342,9 @@ async def handle_call_tool(
             Chave = valores["Chave"]
             ImagemFrente = valores["ImagemFrente"]
             ImagemVerso = arguments.get("ImagemVerso")
-            ImagemSelfie = valores["ImagemSelfie"]
+            ImagemSelfie = arguments.get("ImagemSelfie")
             ImagemQrCode = arguments.get("ImagemQrCode")
-            CPF = valores["CPF"]
-            NumeroDocumentoInformado = valores["NumeroDocumentoInformado"]
-            NomeInformado = valores["NomeInformado"]
-            NomeMaeInformado = valores["NomeMaeInformado"]
-            DataNascimentoInformada = valores["DataNascimentoInformada"]
-            Email = valores["Email"]
-            TelefoneCelular = valores["TelefoneCelular"]
-            EnderecoCep = valores["EnderecoCep"]
-            EnderecoLogradouro = valores["EnderecoLogradouro"]
-            EnderecoNumero = valores["EnderecoNumero"]
-            EnderecoComplemento = valores["EnderecoComplemento"]
-            EnderecoBairro = valores["EnderecoBairro"]
-            EnderecoCidade = valores["EnderecoCidade"]
-            EnderecoUf = valores["EnderecoUf"]
-            Renda = valores["Renda"]
-            Produto = valores["Produto"]
-            Ticket = valores["Ticket"]
-            ScoreBiometria = valores["ScoreBiometria"]
-            ip = arguments.get("IP")
-            RequerMesa = arguments.get("RequerMesa")
-            MensagemParaAnalista = arguments.get("MensagemParaAnalista")
+            CPF = arguments.get("CPF")
             
             base64ImagemFrente = converter_para_base64(ImagemFrente);
             
@@ -487,26 +369,6 @@ async def handle_call_tool(
                     base64ImagemVerso,
                     base64QrCode,
                     CPF,
-                    NumeroDocumentoInformado,
-                    NomeInformado,
-                    NomeMaeInformado,
-                    DataNascimentoInformada,
-                    Email,
-                    TelefoneCelular,
-                    EnderecoCep,
-                    EnderecoLogradouro,
-                    EnderecoNumero,
-                    EnderecoComplemento,
-                    EnderecoBairro,
-                    EnderecoCidade,
-                    EnderecoUf,
-                    Renda,
-                    Produto,
-                    Ticket,
-                    ScoreBiometria,
-                    ip,
-                    RequerMesa,
-                    MensagemParaAnalista,
                 )
                 
                 return [
