@@ -40,5 +40,5 @@ Contribuições são bem-vindas! Sinta-se à vontade para abrir issues ou enviar
 
 ## Revisão de Código
 
-Este projeto conta com revisão de código automatica pelo Gemini
+Este projeto conta com revisão de código automática pelo Gemini
 https://developers.google.com/gemini-code-assist/docs/review-github-code?hl=pt-br
