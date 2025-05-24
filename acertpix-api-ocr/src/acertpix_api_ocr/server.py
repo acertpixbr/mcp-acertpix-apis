@@ -13,6 +13,8 @@ import mcp.types as types
 from mcp.server import NotificationOptions, Server
 import mcp.server.stdio
 
+import base64
+
 # Carrega variáveis de ambiente de um arquivo .env (opcional)
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", ".env"))
 
@@ -48,6 +50,21 @@ async def handle_list_tools() -> list[types.Tool]:
                     "chave": {"type": "string"},
                 },
                 "required": ["chave"]
+            },
+        ),
+        types.Tool(
+            name="enviar-documento-ocr",
+            description="Enviar um documento para ser gerado um OCR desse documento",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "chave": {"type": "string"},
+                    "cpf": {"type": "string"},
+                    "caminhoImagemFrente": {"type": "string"},
+                    "caminhoImagemVerso": {"type": "string"},
+                    # Adicionar campos do WebHook
+                },
+                "required": ["chave", "caminhoImagemFrente"]
             },
         ),
     ]
@@ -131,6 +148,57 @@ async def consultar_ocr(chave: str) -> Dict[str, Any]:
         print(f"ERRO:     Falha na ferramenta 'consultar-ocr': {e}")
         return {"status": "erro", "mensagem": f"Erro ao consultar OCR: {str(e)}"}
 
+
+async def enviar_documento_ocr(chave: str, cpf: str, imagemFrente: str, imagemVerso: str) -> Dict[str, Any]:
+    try:
+        access_token = await _internal_get_access_token(CLIENT_ID, CLIENT_SECRET)
+        print(f"\nToken gerado: {access_token}\n")
+    
+        url = f"{API_BASE_URL}{OCR_ENDPOINT}/Enviar"
+    
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Bearer {access_token}",
+        }
+        # params = {"chave": chave} # Parâmetros GET vão em 'params' com httpx
+            
+        content = {
+            "chave": chave,
+            "cpf": cpf,
+            "imagemFrente": imagemFrente,
+            "imagemVerso": imagemVerso
+        }
+        
+        print(f"INFO:     enviando documento para ocr em: {url}")
+
+        # 3. Fazer a chamada GET para a API
+        async with httpx.AsyncClient(verify=SSL_VERIFY) as client:
+            response = await client.post(url, headers=headers, json=content)
+            print(f"INFO:     Resposta ocr Status: {response.status_code}")
+            response.raise_for_status() # Levanta exceção para status >= 400
+            ocr_data = response.json()
+        
+        print(f"ocr response status: {response.status_code}")
+        print(f"ocr response text: {response.text}")
+        
+        return {
+        "status": "sucesso",
+        "resultado": ocr_data
+        }
+    
+    except Exception as e:
+        print(f"ERRO:     Falha na ferramenta 'consultar-ocr': {e}")
+        return {"status": "erro", "mensagem": f"Erro ao consultar OCR: {str(e)}"}
+
+def converter_para_base64(caminhoImagem: str) -> str:
+    try:
+        with open(caminhoImagem, "rb") as imagem:
+            imagem_bytes = imagem.read()
+            imagem_base64 = base64.b64encode(imagem_bytes).decode("utf-8")
+            return imagem_base64
+    except Exception as e:
+        print(f"Erro ao converter imagem: {e}")             
     
 @server.call_tool()
 async def handle_call_tool(
@@ -166,7 +234,43 @@ async def handle_call_tool(
                 )
             ]
         
-        
+        case "enviar-documento-ocr":
+            chave = arguments.get("chave")
+            cpf = arguments.get("cpf")
+            caminhoImagemFrente = arguments.get("caminhoImagemFrente")
+            caminhoImagemVerso = arguments.get("caminhoImagemVerso")
+            
+            if not all([chave]):
+                raise ValueError("Chave é obrigatória")
+            
+            if not all([caminhoImagemFrente]):
+                raise ValueError("ImagemFrente é obrigatória")
+            
+            
+            base64ImagemFrente = converter_para_base64(caminhoImagemFrente)
+
+            base64ImagemVerso = ""
+            if(caminhoImagemVerso):
+                base64ImagemVerso = converter_para_base64(caminhoImagemVerso)
+
+            try:
+                resultado = await enviar_documento_ocr(chave, cpf, base64ImagemFrente, base64ImagemVerso)
+                return [
+                    types.TextContent(
+                        type="text",
+                        text=f"Resultado do envio do documento OCR : {resultado}"
+                    ) 
+                ]
+                
+            except Exception as e:
+                return [
+                    types.TextContent(
+                        type="text",
+                        text=f"Erro ao enviar documento ocr {str(e)}\nURL: {API_BASE_URL}"
+                    )
+                ]
+            
+     
 async def main():
     """
     Inicia o servidor MCP.
