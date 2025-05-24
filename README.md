@@ -37,3 +37,8 @@ Para instruções detalhadas sobre como executar o servidor `acertpix-api-score`
 ## Contribuição
 
 Contribuições são bem-vindas! Sinta-se à vontade para abrir issues ou enviar pull requests para melhorias ou correções.
+
+## Revisão de Código
+
+Este projeto conta com revisão de código automática pelo Gemini
+https://developers.google.com/gemini-code-assist/docs/review-github-code?hl=pt-br
