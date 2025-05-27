@@ -208,6 +208,7 @@ def converter_para_base64(caminhoImagem: str) -> str:
             return imagem_base64
     except Exception as e:
         print(f"Erro ao converter imagem: {e}")
+        return ""
     
 @server.call_tool()
 async def handle_call_tool(

@@ -210,7 +210,8 @@ def converter_para_base64(caminhoImagem: str) -> str:
             imagem_base64 = base64.b64encode(imagem_bytes).decode("utf-8")
             return imagem_base64
     except Exception as e:
-        print(f"Erro ao converter imagem: {e}")  
+        print(f"Erro ao converter imagem: {e}")
+        return ""  
 
 
 async def obter_pdf_facematch(id: int, caminho_salvar: str) -> Dict[str, Any]:
