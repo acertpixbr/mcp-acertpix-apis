@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field, AnyUrl
@@ -30,6 +31,7 @@ print(f"INFO:     SSL Verify: {SSL_VERIFY}")
 
 TOKEN_ENDPOINT = "/OAuth2/Token"
 LITE_ENDPOINT = "/Lite"
+LITE_ENVIAR_ENDPOINT = "/Lite/Enviar"
 
 server = Server("acertpix-api-lite")
 
@@ -50,6 +52,25 @@ async def handle_list_tools() -> list[types.Tool]:
                 "required": ["chave"]
             },
         ),
+        types.Tool(
+            name="enviar-lite",
+            description="Enviar documento lite na API da AcertPix",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "Chave": {"type": "string"},
+                    "ImagemFrente": {"type": "string"},
+                    "ImagemVerso": {"type": "string"},
+                    "ImagemSelfie": {"type": "string"},
+                    "ImagemQrCode": {"type": "string"},
+                    "CPF": {"type": "string"}
+                },
+                "required": [
+                    "Chave",
+                    "ImagemFrente",
+                ],
+            },
+        ),
     ]
     
       
@@ -68,7 +89,7 @@ async def _internal_get_access_token(client_id: str, client_secret: str) -> str:
     }
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
 
-    print(f"INFO:     Tentando obter token de: {url}")
+    print(f"INFO:     Tentando obter token de: {url}") 
 
     async with httpx.AsyncClient(verify=SSL_VERIFY) as client:
         try:
@@ -131,6 +152,63 @@ async def consultar_lite(chave: str) -> Dict[str, Any]:
         print(f"ERRO:     Falha na ferramenta 'consultar-lite': {e}")
         return {"status": "erro", "mensagem": f"Erro ao consultar lite: {str(e)}"}
 
+
+async def enviar_lite(
+    Chave: str,
+    ImagemFrente: str,
+    ImagemVerso: str,
+    ImagemSelfie: str,
+    ImagemQrCode: str,
+    CPF: str,
+) -> Dict[str, Any]:
+    try:
+        access_token = await _internal_get_access_token(CLIENT_ID, CLIENT_SECRET)
+        print(f"\nToken gerado: {access_token}\n")
+
+        url = f"{API_BASE_URL}{LITE_ENVIAR_ENDPOINT}"
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Bearer {access_token}",
+        }
+        # params = {"chave": chave} # Parâmetros GET vão em 'params' com httpx
+
+        content = {
+            "Chave": Chave,
+            "ImagemFrente": ImagemFrente,
+            "ImagemVerso": ImagemVerso,
+            "ImagemSelfie": ImagemSelfie,
+            "ImagemQrCode": ImagemQrCode,
+            "CPF": CPF
+        }
+
+        print(f"INFO:     enviando documento lite para analise em: {url}")
+
+        async with httpx.AsyncClient(verify=SSL_VERIFY) as client:
+            response = await client.post(url, headers=headers, json=content)
+            print(f"INFO:     Resposta enviar lite Status: {response.status_code}")
+            response.raise_for_status()  
+            ocr_data = response.json()
+
+        print(f"lite response status: {response.status_code}")
+        print(f"lite response text: {response.text}")
+
+        return {"status": "sucesso", "resultado": ocr_data}
+
+    except Exception as e:
+        print(f"ERRO:     Falha na ferramenta 'enviar-lite': {e}")
+        return {"status": "erro", "mensagem": f"Erro ao enviar lite: {str(e)}"}
+    
+def converter_para_base64(caminhoImagem: str) -> str:
+    try:
+        with open(caminhoImagem, "rb") as imagem:
+            imagem_bytes = imagem.read()
+            imagem_base64 = base64.b64encode(imagem_bytes).decode("utf-8")
+            return imagem_base64
+    except Exception as e:
+        print(f"Erro ao converter imagem: {e}")
+        return ""
     
 @server.call_tool()
 async def handle_call_tool(
@@ -165,6 +243,67 @@ async def handle_call_tool(
                     text=f"Erro ao consultar analise lite: {str(e)}\nURL: {API_BASE_URL}"
                 )
             ]
+        case "enviar-lite":
+
+            campos_obrigatorios = [
+                "Chave",
+                "ImagemFrente"
+            ]
+            
+            valores = {}
+
+            for campo in campos_obrigatorios:
+                valor = arguments.get(campo)
+                if not valor and valor != 0:
+                    raise ValueError(f"O campo '{campo}' é obrigatório")
+                valores[campo] = valor
+
+            Chave = valores["Chave"]
+            ImagemFrente = valores["ImagemFrente"]
+            ImagemVerso = arguments.get("ImagemVerso", "")
+            ImagemSelfie = arguments.get("ImagemSelfie", "")
+            ImagemQrCode = arguments.get("ImagemQrCode", "")
+            CPF = arguments.get("CPF", "")
+            
+            base64ImagemFrente = converter_para_base64(ImagemFrente);
+            
+            base64ImagemVerso = ""
+            if ImagemVerso:
+                base64ImagemVerso = converter_para_base64(ImagemVerso)
+                
+            base64Selfie = ""
+            if ImagemSelfie:
+                base64Selfie = converter_para_base64(ImagemSelfie)
+                
+            base64QrCode = ""
+            if ImagemQrCode:
+                base64QrCode = converter_para_base64(ImagemQrCode)
+            
+
+            try:
+                resultado = await enviar_lite(
+                    Chave,
+                    base64ImagemFrente,
+                    base64Selfie,
+                    base64ImagemVerso,
+                    base64QrCode,
+                    CPF,
+                )
+                
+                return [
+                    types.TextContent(
+                        type="text",
+                        text=f"Resultado do envio do documento lite para analise :\n{resultado}",
+                    )
+                ]
+
+            except Exception as e:
+                return [
+                    types.TextContent(
+                        type="text",
+                        text=f"Erro ao enviar documento lite para analise: {str(e)}\nURL: {API_BASE_URL}",
+                    )
+                ]
         
         
 async def main():

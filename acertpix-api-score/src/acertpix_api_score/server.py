@@ -1,12 +1,14 @@
 import asyncio
 import json
+import base64
 from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field, AnyUrl
-# import requests
-import httpx # Adicionado para chamadas HTTP assíncronas
 
-import os # Para carregar variáveis de ambiente (opcional, mas bom)
-from dotenv import load_dotenv # Para carregar .env (opcional)
+# import requests
+import httpx  # Adicionado para chamadas HTTP assíncronas
+
+import os  # Para carregar variáveis de ambiente (opcional, mas bom)
+from dotenv import load_dotenv  # Para carregar .env (opcional)
 
 from mcp.server.models import InitializationOptions
 import mcp.types as types
@@ -14,7 +16,9 @@ from mcp.server import NotificationOptions, Server
 import mcp.server.stdio
 
 # Carrega variáveis de ambiente de um arquivo .env (opcional)
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", ".env"))
+load_dotenv(
+    dotenv_path=os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", ".env")
+)
 
 # Configurações da API
 API_BASE_URL = os.getenv("ACERTPIX_API_URL", "https://devapi.plataformaacertpix.com.br")
@@ -29,9 +33,10 @@ print(f"INFO:     Client Secret: {CLIENT_SECRET}")
 print(f"INFO:     SSL Verify: {SSL_VERIFY}")
 
 TOKEN_ENDPOINT = "/OAuth2/Token"
-SCORE_ENDPOINT = "/Score/Consultar"
+SCORE_ENDPOINT = "/Score"
 
 server = Server("acertpix-api-score")
+
 
 @server.list_tools()
 async def handle_list_tools() -> list[types.Tool]:
@@ -47,10 +52,10 @@ async def handle_list_tools() -> list[types.Tool]:
                 "properties": {
                     "chave": {"type": "string"},
                 },
-                "required": ["chave"]
+                "required": ["chave"],
             },
         ),
-         types.Tool(
+        types.Tool(
             name="obter-laudo-score",
             description="Consultar o Laudo Score de um Id na API da Acertpix",
             inputSchema={
@@ -58,11 +63,30 @@ async def handle_list_tools() -> list[types.Tool]:
                 "properties": {
                     "id": {"type": "integer"},
                 },
-                "required": ["id"]
+                "required": ["id"],
             },
-        )
-
+        ),
+        types.Tool(
+            name="enviar-documento-score",
+            description="Enviar documento para gerar o score na API Acertpix",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "Chave": {"type": "string"},
+                    "ImagemFrente": {"type": "string"},
+                    "ImagemVerso": {"type": "string"},
+                    "ImagemSelfie": {"type": "string"},
+                    "ImagemQrCode": {"type": "string"},
+                    "CPF": {"type": "string"},  
+                },
+                "required": [
+                    "Chave",
+                    "ImagemFrente",
+                ],
+            },
+        ),
     ]
+
 
 async def _internal_get_access_token(client_id: str, client_secret: str) -> str:
     """
@@ -71,11 +95,11 @@ async def _internal_get_access_token(client_id: str, client_secret: str) -> str:
     Levanta exceção em caso de erro.
     """
     url = f"{API_BASE_URL}{TOKEN_ENDPOINT}"
-    payload = { # httpx prefere dicts para json
+    payload = {  # httpx prefere dicts para json
         "Scope": "api",
         "GrantType": "client_credentials",
         "ClientId": client_id,
-        "ClientSecret": client_secret
+        "ClientSecret": client_secret,
     }
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
 
@@ -86,21 +110,29 @@ async def _internal_get_access_token(client_id: str, client_secret: str) -> str:
             response = await client.post(url, json=payload, headers=headers)
             print(f"INFO:     Resposta Token Status: {response.status_code}")
 
-            response.raise_for_status() # Levanta exceção para status >= 400
+            response.raise_for_status()  # Levanta exceção para status >= 400
 
             token_data = response.json()
             if "access_token" not in token_data:
-                raise ValueError(f"Campo 'access_token' não encontrado na resposta da API de Token: {token_data}")
+                raise ValueError(
+                    f"Campo 'access_token' não encontrado na resposta da API de Token: {token_data}"
+                )
 
             token = token_data["access_token"]
             print(f"INFO:     Token obtido com sucesso (prefixo): {token[:10]}...")
             return token
         except httpx.RequestError as e:
             print(f"ERRO:     Erro de rede ao obter token: {e}")
-            raise Exception(f"Erro de rede ao conectar com {e.request.url!r}: {e}") from e
+            raise Exception(
+                f"Erro de rede ao conectar com {e.request.url!r}: {e}"
+            ) from e
         except httpx.HTTPStatusError as e:
-            print(f"ERRO:     Erro HTTP ao obter token: {e.response.status_code} - {e.response.text}")
-            raise Exception(f"Erro HTTP {e.response.status_code} da API de Token: {e.response.text}") from e
+            print(
+                f"ERRO:     Erro HTTP ao obter token: {e.response.status_code} - {e.response.text}"
+            )
+            raise Exception(
+                f"Erro HTTP {e.response.status_code} da API de Token: {e.response.text}"
+            ) from e
         except (json.JSONDecodeError, ValueError, KeyError) as e:
             print(f"ERRO:     Erro ao processar resposta do token: {e}")
             raise Exception(f"Erro ao processar resposta da API de Token: {e}") from e
@@ -115,34 +147,30 @@ async def consultar_score(chave: str) -> Dict[str, Any]:
         # 1. Obter o token de acesso usando a lógica interna
         access_token = await _internal_get_access_token(CLIENT_ID, CLIENT_SECRET)
         print(f"\nToken gerado: {access_token}\n")
-        
-        url = f"{API_BASE_URL}{SCORE_ENDPOINT}?chave={chave}"
-        
+
+        url = f"{API_BASE_URL}{SCORE_ENDPOINT}/Consultar?chave={chave}"
+
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
             "Authorization": f"Bearer {access_token}",
         }
-        params = {"chave": chave} # Parâmetros GET vão em 'params' com httpx
-        
+        params = {"chave": chave}  # Parâmetros GET vão em 'params' com httpx
+
         print(f"INFO:     Consultando score em: {url}")
 
         # 3. Fazer a chamada GET para a API de Score
         async with httpx.AsyncClient(verify=SSL_VERIFY) as client:
             response = await client.get(url, headers=headers, params=params)
             print(f"INFO:     Resposta Score Status: {response.status_code}")
-            response.raise_for_status() # Levanta exceção para status >= 400
+            response.raise_for_status()  # Levanta exceção para status >= 400
             score_data = response.json()
-        
+
         print(f"Score response status: {response.status_code}")
         print(f"Score response text: {response.text}")
-        
-        return {
-            "status": "sucesso",
-            "resultado": score_data
-        }
 
-    
+        return {"status": "sucesso", "resultado": score_data}
+
     except Exception as e:
         print(f"ERRO:     Falha na ferramenta 'consultar-score': {e}")
         return {"status": "erro", "mensagem": f"Erro ao consultar score: {str(e)}"}
@@ -152,39 +180,100 @@ async def obter_laudo_score(id: int) -> Dict[str, Any]:
     try:
         access_token = await _internal_get_access_token(CLIENT_ID, CLIENT_SECRET)
         print(f"\nToken gerado: {access_token}\n")
-        
-        url = f"{API_BASE_URL}/Score/ObterLaudo/{id}"
+
+        url = f"{API_BASE_URL}{SCORE_ENDPOINT}/ObterLaudo/{id}"
 
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
             "Authorization": f"Bearer {access_token}",
         }
-        params = {"id": id} # Parâmetros GET vão em 'params' com httpx
-        
+        params = {"id": id}  # Parâmetros GET vão em 'params' com httpx
+
         print(f"INFO:     Obtendo laudo score em: {url}")
 
         # 3. Fazer a chamada GET para a API de Score
         async with httpx.AsyncClient(verify=SSL_VERIFY) as client:
             response = await client.get(url, headers=headers, params=params)
             print(f"INFO:     Resposta ObterLaudo score Status: {response.status_code}")
-            response.raise_for_status() # Levanta exceção para status >= 400
+            response.raise_for_status()  # Levanta exceção para status >= 400
             obter_laudo_score_data = response.json()
-        
+
         print(f"ObterLaudo score response status: {response.status_code}")
         print(f"ObterLaudo score response text: {response.text}")
-        
-        return {
-            "status": "sucesso",
-            "resultado": obter_laudo_score_data
-        }
 
+        return {"status": "sucesso", "resultado": obter_laudo_score_data}
 
     except Exception as e:
         print(f"ERRO:     Falha na ferramenta 'obter-laudo-scoree': {e}")
         return {"status": "erro", "mensagem": f"Erro ao obter laudo score: {str(e)}"}
 
-    
+
+async def enviar_documento_score(
+    Chave: str,
+    ImagemFrente: str,
+    ImagemVerso: str,
+    ImagemSelfie: str,
+    ImagemQrCode: str,
+    CPF: str,
+) -> Dict[str, Any]:
+    try:
+        access_token = await _internal_get_access_token(CLIENT_ID, CLIENT_SECRET)
+        print(f"\nToken gerado: {access_token}\n")
+
+        url = f"{API_BASE_URL}{SCORE_ENDPOINT}/Enviar"
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Bearer {access_token}",
+        }
+        # params = {"chave": chave} # Parâmetros GET vão em 'params' com httpx
+
+        content = {
+            "Chave": Chave,
+            "ImagemFrente": ImagemFrente,
+            "ImagemVerso": ImagemVerso,
+            "ImagemSelfie": ImagemSelfie,
+            "ImagemQrCode": ImagemQrCode,
+            "CPF": CPF
+        }
+
+        print(f"INFO:     enviando documento para analise em: {url}")
+
+        # 3. Fazer a chamada GET para a API
+        async with httpx.AsyncClient(verify=SSL_VERIFY) as client:
+            response = await client.post(url, headers=headers, json=content)
+            print(
+                f"INFO:     Resposta enviar documento score Status: {response.status_code}"
+            )
+            response.raise_for_status()  # Levanta exceção para status >= 400
+            enviar_score_data = response.json()
+
+        print(f"ocr response status: {response.status_code}")
+        print(f"ocr response text: {response.text}")
+
+        return {"status": "sucesso", "resultado": enviar_score_data}
+
+    except Exception as e:
+        print(f"ERRO:     Falha na ferramenta 'enviar-documento-score': {e}")
+        return {
+            "status": "erro",
+            "mensagem": f"Erro ao enviar documento score: {str(e)}",
+        }
+
+
+def converter_para_base64(caminhoImagem: str) -> str:
+    try:
+        with open(caminhoImagem, "rb") as imagem:
+            imagem_bytes = imagem.read()
+            imagem_base64 = base64.b64encode(imagem_bytes).decode("utf-8")
+            return imagem_base64
+    except Exception as e:
+        print(f"Erro ao converter imagem: {e}")
+        return ""
+
+
 @server.call_tool()
 async def handle_call_tool(
     name: str, arguments: dict | None
@@ -197,60 +286,117 @@ async def handle_call_tool(
 
     match name:
         case "consultar-score":
-            chave = arguments.get("chave") 
+            chave = arguments.get("chave")
             if not all([chave]):
                 raise ValueError("Chave é obrigatória")
-           
+
             try:
                 resultado = await consultar_score(chave)
-                
+
                 return [
-                types.TextContent(
-                    type="text",
-                    text=f"Resultado da consulta de score para chave {chave}:\n{resultado}"
-                )
-             ]
-                
+                    types.TextContent(
+                        type="text",
+                        text=f"Resultado da consulta de score para chave {chave}:\n{resultado}",
+                    )
+                ]
+
             except Exception as e:
                 return [
                     types.TextContent(
-                    type="text",
-                    text=f"Erro ao consultar score: {str(e)}\nURL: {API_BASE_URL}"
-                )
-                    ]
-       
+                        type="text",
+                        text=f"Erro ao consultar score: {str(e)}\nURL: {API_BASE_URL}",
+                    )
+                ]
+
         case "obter-laudo-score":
-             id = arguments.get("id")
-             
-             if not all([id]):
+            id = arguments.get("id")
+
+            if not all([id]):
                 raise ValueError("Id é obrigatório")
-            
-             try:
+
+            try:
                 resultado = await obter_laudo_score(id)
-                
+
                 return [
                     types.TextContent(
-                    type="text",
-                    text=f"Resultado da consulta de obter laudo score para id {id}:\n{resultado}"
-                )   
-                 
-               ]
-                
-             except Exception as e:
-                 return [
+                        type="text",
+                        text=f"Resultado da consulta de obter laudo score para id {id}:\n{resultado}",
+                    )
+                ]
+
+            except Exception as e:
+                return [
                     types.TextContent(
-                    type="text",
-                    text=f"Erro ao obter laudo score: {str(e)}\nURL: {API_BASE_URL}"
+                        type="text",
+                        text=f"Erro ao obter laudo score: {str(e)}\nURL: {API_BASE_URL}",
+                    )
+                ]
+
+        case "enviar-documento-score":
+
+            campos_obrigatorios = [
+                "Chave",
+                "ImagemFrente",
+            ]
+
+            valores = {}
+
+            for campo in campos_obrigatorios:
+                valor = arguments.get(campo)
+                if not valor and valor != 0:
+                    raise ValueError(f"O campo '{campo}' é obrigatório")
+                valores[campo] = valor
+
+            Chave = valores["Chave"]
+            ImagemFrente = valores["ImagemFrente"]
+            ImagemVerso = arguments.get("ImagemVerso")
+            ImagemSelfie = arguments.get("ImagemSelfie")
+            ImagemQrCode = arguments.get("ImagemQrCode")
+            CPF = arguments.get("CPF")
+
+
+            base64ImagemFrente = converter_para_base64(ImagemFrente)
+
+            base64ImagemVerso = ""
+            if ImagemVerso:
+                base64ImagemVerso = converter_para_base64(ImagemVerso)
+
+            base64Selfie = ""
+            if ImagemSelfie:
+                base64Selfie = converter_para_base64(ImagemSelfie)
+
+            base64QrCode = ""
+            if ImagemQrCode:
+                base64QrCode = converter_para_base64(ImagemQrCode)
+
+            try:
+                resultado = await enviar_documento_score(
+                    Chave,
+                    base64ImagemFrente,
+                    base64Selfie,
+                    base64ImagemVerso,
+                    base64QrCode,
+                    CPF
                 )
-                
-            ]     
-           
-            
-               
-                      
+
+                return [
+                    types.TextContent(
+                        type="text",
+                        text=f"Resultado do envio do documento para score :\n{resultado}",
+                    )
+                ]
+
+            except Exception as e:
+                return [
+                    types.TextContent(
+                        type="text",
+                        text=f"Erro ao enviar documento para score: {str(e)}\nURL: {API_BASE_URL}",
+                    )
+                ]
+
         case _:
             raise ValueError(f"Ferramenta desconhecida: {name}")
-        
+
 
 async def main():
     """
@@ -269,6 +415,7 @@ async def main():
                 ),
             ),
         )
+
 
 if __name__ == "__main__":
     asyncio.run(main())
