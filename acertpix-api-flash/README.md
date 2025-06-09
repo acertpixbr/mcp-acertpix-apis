@@ -1,6 +1,6 @@
 # Acertpix API Facematch (Biometria) MCP Server
 
-Servidor MCP para integração com a API Facematch (Biometria) da Acertpix.
+Servidor MCP para integração com a API Flash da Acertpix.
 
 ## Tabela de Conteúdo
 
@@ -15,7 +15,11 @@ Servidor MCP para integração com a API Facematch (Biometria) da Acertpix.
 
 ## Funcionalidades
 
--   **Consulta de facematch por chave:** Permite consultar o facematch das fotos de uma pessoa física.
+-   **Consulta resultado flash:** Permite consultar resultado da validação Flash de um documento.
+
+-   **Envio de documentos para Flash:** Permite o envio de documentos de acordo com o modelo do documento com Flash
+
+-   **Extração de dados de um documento com Flash :** Permite extrair dados de um documento de acordo com o modelo do documento com Flash
 
 ## Requisitos
 
@@ -28,7 +32,7 @@ Servidor MCP para integração com a API Facematch (Biometria) da Acertpix.
 
     ```bash
     git clone <repository_url>
-    cd acertpix-api-facematch
+    cd acertpix-api-flash
     ```
 
 2.  Instale os pacotes:
@@ -40,7 +44,7 @@ Servidor MCP para integração com a API Facematch (Biometria) da Acertpix.
 3. Para usar Docker, build a imagem
 
     ```bash
-    docker build -t acertpix-api-facematch .
+    docker build -t acertpix-api-flash .
     ```
 
 4. Precisa informar as variáveis de ambiente:
@@ -63,7 +67,7 @@ Arquivo de configuração mcp.json, configuração para acesso por docker ou dir
 ```json
 {
     "servers": {
-        "acertpix-api-facematch-docker": {
+        "acertpix-api-flash-docker": {
             "type": "stdio",
             "command": "docker",
             "args": ["run", "-i", 
@@ -73,13 +77,13 @@ Arquivo de configuração mcp.json, configuração para acesso por docker ou dir
             "-e","ACERTPIX_CLIENT_SECRET=yyyyyyy",
             "-e","ACERTPIX_API_SSL_VERIFY=false",
             "--rm", 
-            "-p", "8000:8000", "acertpix-api-facematch"]
+            "-p", "8000:8000", "acertpix-api-flash"]
         },
-        "acertpix-api-facematch-src": {
+        "acertpix-api-flash-src": {
             "command": "python",
             "args": [
                 "-m",
-                "acertpix_api_facematch"
+                "acertpix_api_flash"
             ]
         },        
     }
@@ -90,7 +94,7 @@ Arquivo de configuração mcp.json, configuração para acesso por docker ou dir
 
 ```python
 # Exemplo de chamada à ferramenta (para referência)
-resultado = await server.call_tool("consultar-facematch", {
+resultado = await server.call_tool("consultar-flash", {
     "chave": "12345678900"
 })
 ```
