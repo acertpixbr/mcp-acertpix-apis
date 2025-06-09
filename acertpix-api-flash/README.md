@@ -1,4 +1,4 @@
-# Acertpix API Facematch (Biometria) MCP Server
+# Acertpix API Flash MCP Server
 
 Servidor MCP para integração com a API Flash da Acertpix.
 
